@@ -1,0 +1,1063 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EcoCampus Guide | Institutional Sustainability Intelligence</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js"></script>
+    <!-- Firebase Realtime Database SDK (Compat) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        eco: { 50: '#f0fdf4', 100: '#dcfce7', 500: '#10b981', 600: '#059669', 700: '#047857', 900: '#064e3b' }
+                    },
+                    fontFamily: { sans: ['Plus Jakarta Sans', 'sans-serif'] }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        [x-cloak] { display: none !important; }
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f8fafc; margin: 0; }
+        .eco-gradient { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+        .glass { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(226, 232, 240, 0.8); }
+        
+        .nav-link { 
+            font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #64748b; 
+            transition: all 0.2s ease; padding: 8px 16px; border-radius: 99px;
+            display: inline-flex; align-items: center; cursor: pointer;
+        }
+        .nav-link:hover { color: #059669; background-color: #f8fafc; }
+        .nav-link.active { color: #059669; background-color: #dcfce7; }
+
+        .card-shadow { box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.05); }
+        .bg-overlay { background: linear-gradient(to bottom, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.65) 100%); }
+        
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+        .calendar-cell { 
+            min-height: 76px; border-radius: 16px; padding: 8px; transition: all 0.2s ease; 
+            display: flex; flex-direction: column; justify-content: space-between; cursor: pointer;
+            border: 1.5px solid #f1f5f9; background: #ffffff;
+        }
+        .calendar-cell:hover { border-color: #10b981; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(16, 185, 129, 0.08); }
+        .calendar-cell.selected { border-color: #059669; background-color: #f0fdf4; }
+        .calendar-cell.empty { background: transparent; border-color: transparent; cursor: default; }
+        .calendar-cell.empty:hover { transform: none; box-shadow: none; }
+    </style>
+</head>
+<body x-data="ecoApp()" x-init="init()" class="h-full overflow-x-hidden text-slate-900 selection:bg-eco-100">
+
+    <!-- 1. AUTHENTICATION & REGISTRATION MODAL -->
+    <div x-show="!currentUser" x-transition.opacity class="fixed inset-0 z-[200] eco-gradient flex items-center justify-center p-4 overflow-y-auto">
+        <div class="max-w-md w-full bg-white rounded-[2.5rem] shadow-2xl p-8 md:p-10 text-left my-8">
+            <div class="text-center mb-8">
+                <div class="w-16 h-16 bg-eco-50 rounded-2xl flex items-center justify-center text-eco-600 mx-auto mb-4 shadow-sm border border-eco-100">
+                    <i data-lucide="leaf" class="w-8 h-8"></i>
+                </div>
+                <h1 class="text-2xl font-black tracking-tight text-slate-900">EcoCampus Guide</h1>
+                <p class="text-slate-500 text-xs font-medium mt-1">Institutional Sustainability Intelligence</p>
+            </div>
+
+            <!-- Verification Step Modal Overlay Inside Auth -->
+            <div x-show="pendingVerification" class="space-y-6 text-center">
+                <div class="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto text-emerald-600">
+                    <i data-lucide="shield-check" class="w-8 h-8"></i>
+                </div>
+                <div>
+                    <h3 class="text-xl font-black uppercase text-slate-900">Verify Your Account</h3>
+                    <p class="text-xs text-slate-500 mt-2">We sent a 6-digit confirmation code to <span class="font-bold text-slate-800" x-text="authForm.email"></span>.</p>
+                </div>
+                
+                <div class="bg-emerald-50 p-4 rounded-2xl border border-emerald-200">
+                    <p class="text-[11px] font-bold text-emerald-800">💡 Verification Code:</p>
+                    <p class="text-2xl font-black text-emerald-700 tracking-widest mt-1" x-text="generatedCode"></p>
+                </div>
+
+                <div>
+                    <input type="text" x-model="enteredCode" placeholder="Enter 6-digit code" class="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-center text-xl font-black tracking-widest focus:outline-none focus:border-emerald-500" maxlength="6">
+                </div>
+
+                <button @click="verifyAndCompleteAuth()" class="w-full eco-gradient text-white font-black py-4 rounded-2xl shadow-xl uppercase tracking-widest text-xs hover:opacity-95 transition">
+                    Confirm & Enter Platform
+                </button>
+                <button @click="pendingVerification = false" class="text-xs font-bold text-slate-400 hover:text-slate-600 uppercase">Back to Register</button>
+            </div>
+
+            <!-- Standard Auth Form (No mention of developer username) -->
+            <div x-show="!pendingVerification">
+                <div class="flex bg-slate-100 p-1 rounded-2xl mb-6">
+                    <button type="button" @click="authMode = 'login'" :class="authMode === 'login' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'" class="flex-1 py-2.5 text-xs font-black uppercase tracking-wider rounded-xl transition">
+                        Sign In
+                    </button>
+                    <button type="button" @click="authMode = 'register'" :class="authMode === 'register' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'" class="flex-1 py-2.5 text-xs font-black uppercase tracking-wider rounded-xl transition">
+                        Register
+                    </button>
+                </div>
+
+                <form @submit.prevent="handleAuth()" class="space-y-4">
+                    <div x-show="authMode === 'register'">
+                        <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Full Name / Username</label>
+                        <input type="text" x-model="authForm.name" placeholder="e.g. Alex Mercer" class="w-full mt-1 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold focus:outline-none focus:border-emerald-500">
+                    </div>
+
+                    <div>
+                        <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Email / Login</label>
+                        <input type="text" x-model="authForm.email" placeholder="name@example.com" class="w-full mt-1 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold focus:outline-none focus:border-emerald-500" required>
+                    </div>
+
+                    <div>
+                        <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Password</label>
+                        <input type="password" x-model="authForm.password" placeholder="••••••••" class="w-full mt-1 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold focus:outline-none focus:border-emerald-500" required>
+                    </div>
+
+                    <div class="space-y-4 pt-2">
+                        <div>
+                            <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Account Role</label>
+                            <select x-model="authForm.role" class="w-full mt-1 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-700 focus:outline-none focus:border-emerald-500">
+                                <option value="individual">Student / Volunteer (Steward)</option>
+                                <option value="org">Organization / School Director</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <div class="flex justify-between items-center ml-1">
+                                <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400">School / Institution (Optional)</label>
+                                <span class="text-[9px] font-bold text-emerald-600 uppercase">Can be changed later</span>
+                            </div>
+                            <input type="text" x-model="authForm.school" placeholder="Leave blank if independent, or enter your institution" class="w-full mt-1 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold focus:outline-none focus:border-emerald-500">
+                        </div>
+                    </div>
+
+                    <button type="submit" class="w-full eco-gradient text-white font-black py-4 rounded-2xl shadow-xl uppercase tracking-widest text-xs hover:opacity-95 active:scale-95 transition mt-6" x-text="authMode === 'login' ? 'Enter Dashboard' : 'Proceed to Verification'">
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. NAVIGATION BAR -->
+    <nav class="fixed top-0 w-full z-50 glass h-16 md:h-20 flex items-center" x-show="currentUser" x-cloak>
+        <div class="max-w-7xl mx-auto px-6 w-full flex justify-between items-center">
+            <div class="flex items-center gap-2.5 cursor-pointer" @click="activeTab = 'dashboard'; selectedArticle = null">
+                <div class="p-2 bg-eco-600 rounded-xl text-white shadow-lg shadow-eco-200"><i data-lucide="leaf" class="w-5 h-5"></i></div>
+                <span class="font-black text-xl tracking-tighter uppercase text-emerald-950">EcoCampus</span>
+                <span x-show="cloudConnected" title="Real-Time Sync Active" class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            </div>
+
+            <div class="hidden lg:flex gap-2 items-center">
+                <template x-for="tab in getTabs()" :key="tab.id">
+                    <button @click="activeTab = tab.id; selectedArticle = null; mobileMenu = false" 
+                        :class="activeTab === tab.id ? 'active' : ''" 
+                        class="nav-link" x-text="tab.name"></button>
+                </template>
+                <!-- Developer Exclusive Inbox Tab -->
+                <button x-show="isDeveloper()" @click="activeTab = 'inbox'; selectedArticle = null; mobileMenu = false" 
+                    :class="activeTab === 'inbox' ? 'active' : ''" 
+                    class="nav-link relative text-emerald-700">
+                    <span>Inbox</span>
+                    <span x-show="feedbacks.length > 0" class="ml-1.5 bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full" x-text="feedbacks.length"></span>
+                </button>
+                <button @click="activeTab = 'profile'; selectedArticle = null; mobileMenu = false" :class="activeTab === 'profile' ? 'active' : ''" class="nav-link">Profile</button>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <div class="hidden sm:flex bg-slate-900 text-white px-3.5 py-1.5 rounded-full items-center gap-2 cursor-pointer" @click="activeTab = 'profile'" title="Automatic Tenure & Activity Level">
+                    <span class="text-xs" x-text="getLevelInfo().emoji">🌱</span>
+                    <span class="text-[11px] font-black uppercase tracking-wider text-emerald-400" x-text="getLevelInfo().shortBadge"></span>
+                </div>
+                <div class="hidden sm:flex bg-emerald-50 px-4 py-1.5 rounded-full border border-emerald-200 items-center gap-2 font-bold cursor-pointer" @click="activeTab = 'tracker'">
+                    <span class="text-xs font-black text-emerald-700 uppercase" x-text="user.coins + ' EC 🪙'"></span>
+                </div>
+                <button @click="mobileMenu = !mobileMenu" class="lg:hidden p-2 text-slate-600"><i data-lucide="menu"></i></button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- MOBILE MENU -->
+    <div x-show="mobileMenu" x-transition x-cloak class="fixed inset-0 z-[90] bg-white pt-24 px-8 lg:hidden">
+        <div class="flex flex-col gap-6 text-2xl font-black uppercase tracking-tight text-left">
+            <template x-for="tab in getTabs()" :key="tab.id">
+                <button @click="activeTab = tab.id; selectedArticle = null; mobileMenu = false" 
+                    :class="activeTab === tab.id ? 'text-eco-600' : 'text-slate-500'" 
+                    x-text="tab.name" class="text-left py-2 border-b border-slate-100"></button>
+            </template>
+            <button x-show="isDeveloper()" @click="activeTab = 'inbox'; selectedArticle = null; mobileMenu = false" :class="activeTab === 'inbox' ? 'text-eco-600' : 'text-slate-500'" class="text-left py-2 border-b border-slate-100">Inbox (<span x-text="feedbacks.length"></span>)</button>
+            <button @click="activeTab = 'profile'; selectedArticle = null; mobileMenu = false" :class="activeTab === 'profile' ? 'text-eco-600' : 'text-slate-500'" class="text-left py-2">Profile</button>
+        </div>
+    </div>
+
+    <!-- 3. MAIN CONTENT -->
+    <main class="pt-20 md:pt-28 pb-20 min-h-screen" x-show="currentUser" x-cloak>
+        
+        <!-- VIEW: DASHBOARD -->
+        <div x-show="activeTab === 'dashboard'" x-transition class="max-w-7xl mx-auto px-6 space-y-16 py-6">
+            <div class="grid lg:grid-cols-12 gap-12 items-center">
+                <div class="lg:col-span-7 space-y-6 text-center lg:text-left">
+                    <div class="inline-flex items-center gap-2 bg-emerald-50 border border-emerald-200 px-4 py-1.5 rounded-full text-emerald-700 text-xs font-bold uppercase tracking-widest">
+                        Affiliation: <span x-text="currentUser && currentUser.school ? currentUser.school : 'Independent / Open Community'"></span>
+                    </div>
+                    <h1 class="text-5xl md:text-7xl font-black text-slate-900 leading-tight tracking-tighter">
+                        Toward an <span class="text-eco-600">Institutional</span> <br>Zero-Waste Future.
+                    </h1>
+                    <p class="text-lg text-slate-500 max-w-2xl font-medium leading-relaxed">
+                        EcoCampus Guide provides data-driven protocols to mitigate the 180M kg school waste crisis through active student, volunteer & organizational stewardship.
+                    </p>
+                    <div class="flex flex-wrap gap-4 justify-center lg:justify-start pt-2">
+                        <button @click="activeTab = 'tracker'" class="eco-gradient text-white px-8 py-4 rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl hover:opacity-95 transition">
+                            10 Daily Eco-Habits &rarr;
+                        </button>
+                        <button @click="activeTab = 'profile'" class="bg-white border border-slate-200 text-slate-700 px-8 py-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:border-emerald-500 transition shadow-sm">
+                            Role & Rank Progression
+                        </button>
+                    </div>
+                </div>
+
+                <!-- AUTOMATIC TENURE & EVENT LEVEL PROGRESSION CARD -->
+                <div class="lg:col-span-5 bg-slate-900 p-8 md:p-10 rounded-[3.5rem] text-white shadow-2xl space-y-6 relative overflow-hidden border border-slate-800">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-5">
+                        <div class="flex items-center gap-4 text-left">
+                            <div class="text-6xl bg-slate-800/90 w-20 h-20 rounded-3xl flex items-center justify-center border border-slate-700 shadow-inner shrink-0" x-text="getLevelInfo().emoji">🌱</div>
+                            <div>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <span class="text-[10px] font-black uppercase tracking-widest bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full border border-emerald-500/30" x-text="'Level ' + getLevelInfo().level"></span>
+                                    <span class="text-[10px] font-black uppercase tracking-widest bg-slate-800 text-slate-300 px-2.5 py-1 rounded-full" x-text="getLevelInfo().tenureLabel"></span>
+                                </div>
+                                <h3 class="text-xl md:text-2xl font-black text-white uppercase tracking-tight mt-2" x-text="getLevelInfo().title"></h3>
+                                <p class="text-[11px] text-slate-400 font-semibold mt-0.5" x-text="getLevelInfo().nextMilestoneText"></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Automatic Milestone Progress Bar -->
+                    <div class="space-y-2 text-left">
+                        <div class="flex justify-between text-xs font-extrabold uppercase tracking-wider">
+                            <span class="text-emerald-400">Automatic Rank Progress</span>
+                            <span class="text-slate-400" x-text="getLevelInfo().effectiveDays + ' / ' + getLevelInfo().nextTargetDays + ' Days (' + getLevelInfo().progress + '%)'"></span>
+                        </div>
+                        <div class="w-full h-3.5 bg-slate-800 rounded-full overflow-hidden p-0.5 border border-slate-700">
+                            <div class="h-full eco-gradient rounded-full transition-all duration-500" :style="'width: ' + getLevelInfo().progress + '%'"></div>
+                        </div>
+                        <div class="flex justify-between text-[9px] font-bold uppercase tracking-wider text-slate-500 pt-1">
+                            <span>Day 1</span>
+                            <span>1 Month</span>
+                            <span>3 Months</span>
+                            <span>6 Months</span>
+                            <span>1 Year+</span>
+                        </div>
+                    </div>
+
+                    <!-- Time & Events Metrics Grid -->
+                    <div class="grid grid-cols-2 gap-3 pt-2">
+                        <div class="bg-slate-800/70 border border-slate-700/70 p-4 rounded-2xl text-left">
+                            <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Total Active Tenure</span>
+                            <span class="text-xl font-black text-white mt-1 block" x-text="getLevelInfo().effectiveDays + ' Days'"></span>
+                            <span class="text-[10px] text-emerald-400 font-bold" x-text="'Online time: ' + formatTimeSpent()"></span>
+                        </div>
+
+                        <!-- If Individual / Student: Show Events Attended -->
+                        <div x-show="!isOrg()" class="bg-slate-800/70 border border-slate-700/70 p-4 rounded-2xl text-left">
+                            <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Events Attended</span>
+                            <span class="text-2xl font-black text-emerald-400 mt-1 block" x-text="user.attendedEvents.length"></span>
+                            <span class="text-[10px] text-slate-400 font-bold">+15d Auto-Boost per Event</span>
+                        </div>
+
+                        <!-- If Organization / Director: Show Events Hosted -->
+                        <div x-show="isOrg()" class="bg-slate-800/70 border border-slate-700/70 p-4 rounded-2xl text-left">
+                            <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Events Hosted</span>
+                            <span class="text-2xl font-black text-emerald-400 mt-1 block" x-text="getHostedEventsCount()"></span>
+                            <span class="text-[10px] text-slate-400 font-bold">+30d Auto-Boost per Event</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stats -->
+            <section class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div class="p-10 bg-white border border-slate-100 rounded-[2.5rem] card-shadow">
+                    <p class="text-eco-600 font-bold uppercase text-xs tracking-widest mb-3">School Waste Scale</p>
+                    <h3 class="text-5xl font-black text-slate-900 leading-none">180M <span class="text-xl opacity-40 font-normal">kg</span></h3>
+                    <p class="text-slate-500 text-sm mt-4 font-medium">Aggregate waste generated annually across 24,000 UK schools (WRAP).</p>
+                </div>
+                <div class="p-10 bg-slate-900 rounded-[2.5rem] text-white shadow-xl">
+                    <p class="text-eco-400 font-bold uppercase text-xs tracking-widest mb-3">The Recovery Gap</p>
+                    <h3 class="text-5xl font-black text-white leading-none">20% <span class="text-xl opacity-40 font-normal text-slate-400">Actual</span></h3>
+                    <p class="text-slate-400 text-sm mt-4 leading-relaxed font-medium">Current recycling rate despite 80% theoretical institutional recoverability.</p>
+                </div>
+                <div class="p-10 bg-white border border-slate-100 rounded-[2.5rem] card-shadow">
+                    <p class="text-blue-600 font-bold uppercase text-xs tracking-widest mb-3">USA Daily Context</p>
+                    <h3 class="text-4xl font-black leading-none uppercase tracking-tight">14,500 <span class="text-lg opacity-40 font-normal">Tonnes/Day</span></h3>
+                    <p class="text-slate-500 text-sm mt-4 font-medium">EPA Research: Daily waste output from US public schools.</p>
+                </div>
+            </section>
+        </div>
+
+        <!-- VIEW: KNOWLEDGE BASE -->
+        <div x-show="activeTab === 'knowledge'" x-transition x-cloak class="max-w-7xl mx-auto px-6 py-8 space-y-12">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 border-b border-slate-100 pb-8">
+                <div>
+                    <h2 class="text-4xl font-black uppercase tracking-tight text-slate-900">Knowledge Hub</h2>
+                    <p class="text-slate-500 text-sm mt-1 font-medium">Research papers, practical guides & institutional eco-frameworks.</p>
+                </div>
+                <div class="flex items-center gap-4 w-full md:w-auto">
+                    <input type="text" x-model="searchQuery" placeholder="Search articles..." class="px-5 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-semibold focus:outline-none focus:border-emerald-500 w-full md:w-64 shadow-sm">
+                    <button x-show="isDeveloper()" @click="openArticleModal()" class="eco-gradient text-white px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-wider shadow-lg hover:opacity-95 transition whitespace-nowrap">
+                        + New Article
+                    </button>
+                </div>
+            </div>
+
+            <!-- Article Reader Modal / Full View -->
+            <div x-show="selectedArticle" x-transition class="bg-white rounded-[3rem] overflow-hidden border border-slate-100 card-shadow">
+                <div class="h-64 md:h-96 w-full relative bg-slate-900">
+                    <img :src="selectedArticle && selectedArticle.image ? selectedArticle.image : 'https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?auto=format&fit=crop&w=1200&q=80'" 
+                         onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?auto=format&fit=crop&w=1200&q=80';"
+                         class="w-full h-full object-cover opacity-85" alt="Article Cover">
+                    <div class="absolute inset-0 bg-overlay"></div>
+                    <button @click="selectedArticle = null" class="absolute top-6 left-6 bg-white/95 backdrop-blur px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider text-slate-900 hover:bg-white shadow-lg transition">
+                        &larr; Back to Articles
+                    </button>
+                </div>
+                <div class="p-8 md:p-14 space-y-8">
+                    <div class="space-y-4 max-w-3xl">
+                        <span class="text-xs font-black bg-emerald-100 text-emerald-800 px-3.5 py-1.5 rounded-full uppercase tracking-wider" x-text="selectedArticle ? selectedArticle.category : ''"></span>
+                        <h1 class="text-3xl md:text-5xl font-black text-slate-900 tracking-tight" x-text="selectedArticle ? selectedArticle.title : ''"></h1>
+                        <div class="flex flex-wrap items-center gap-4 text-xs font-bold text-slate-400">
+                            <span>PRIMARY SOURCE: <strong class="text-emerald-700" x-text="selectedArticle ? (selectedArticle.source || selectedArticle.author) : ''"></strong></span>
+                            <span>•</span>
+                            <span x-text="selectedArticle ? selectedArticle.readTime : ''"></span>
+                        </div>
+                    </div>
+                    <div class="prose max-w-none text-slate-600 text-base md:text-lg leading-relaxed space-y-6 pt-6 border-t border-slate-100 font-medium" x-html="selectedArticle ? selectedArticle.content : ''"></div>
+                </div>
+            </div>
+
+            <!-- Empty State if all articles deleted (Without Restore Default Articles button) -->
+            <template x-if="!selectedArticle && filteredArticles().length === 0">
+                <div class="p-12 bg-white rounded-[3rem] text-center border border-slate-100 card-shadow space-y-2">
+                    <p class="text-slate-500 font-bold text-base">No articles available right now.</p>
+                </div>
+            </template>
+
+            <!-- Article Grid -->
+            <div x-show="!selectedArticle" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <template x-for="art in filteredArticles()" :key="art.id">
+                    <div class="bg-white border border-slate-100 rounded-[2.5rem] card-shadow overflow-hidden flex flex-col justify-between hover:border-emerald-500 transition group">
+                        <div>
+                            <div class="h-52 w-full relative overflow-hidden bg-slate-900 cursor-pointer" @click="selectedArticle = art">
+                                <img :src="art.image || 'https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?auto=format&fit=crop&w=800&q=80'" 
+                                     onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?auto=format&fit=crop&w=800&q=80';"
+                                     class="w-full h-full object-cover group-hover:scale-105 transition duration-500" 
+                                     :alt="art.title">
+                                <div class="absolute top-4 left-4 bg-white/95 backdrop-blur-md px-3.5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider text-emerald-800 shadow-sm" x-text="art.category"></div>
+                            </div>
+
+                            <div class="p-7 space-y-3">
+                                <div class="text-[11px] font-extrabold uppercase tracking-wider text-slate-400" x-text="art.readTime"></div>
+                                <h3 @click="selectedArticle = art" class="text-xl font-black text-slate-900 group-hover:text-emerald-600 transition tracking-tight cursor-pointer" x-text="art.title"></h3>
+                                <p class="text-xs text-slate-500 line-clamp-3 leading-relaxed font-medium" x-text="art.snippet"></p>
+                            </div>
+                        </div>
+
+                        <div class="px-7 pb-7 pt-4 border-t border-slate-100 space-y-4">
+                            <div class="flex justify-between items-center">
+                                <div class="pr-2 overflow-hidden">
+                                    <span class="text-[9px] font-extrabold uppercase tracking-wider text-slate-400 block">PRIMARY SOURCE:</span>
+                                    <span class="text-xs font-extrabold text-emerald-800 truncate block" x-text="art.source || art.author || 'EcoCampus Research'"></span>
+                                </div>
+                                <button @click="selectedArticle = art" class="text-xs font-black text-emerald-600 uppercase tracking-wider hover:text-emerald-700 whitespace-nowrap">
+                                    READ &rarr;
+                                </button>
+                            </div>
+
+                            <div x-show="isDeveloper()" class="grid grid-cols-2 gap-3 pt-1">
+                                <button type="button" @click.stop="editArticle(art)" class="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 rounded-xl text-[11px] font-black uppercase text-slate-700 transition flex items-center justify-center gap-1.5">
+                                    <span>✎</span> EDIT
+                                </button>
+                                <button type="button" @click.stop="deleteArticle(art.id)" class="py-2.5 px-4 bg-red-50 hover:bg-red-100 rounded-xl text-[11px] font-black uppercase text-red-600 transition flex items-center justify-center gap-1.5">
+                                    <span>🗑</span> DELETE
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- VIEW: HABIT TRACKER -->
+        <div x-show="activeTab === 'tracker'" x-transition x-cloak class="max-w-7xl mx-auto px-6 space-y-12 py-6">
+            <div class="grid lg:grid-cols-12 gap-10 items-start">
+                <div class="lg:col-span-6 bg-white p-8 md:p-10 rounded-[3rem] border border-slate-100 card-shadow space-y-6">
+                    <div class="flex flex-wrap justify-between items-center gap-2 border-b border-slate-100 pb-4">
+                        <div>
+                            <h2 class="text-2xl font-black uppercase tracking-tight">10 Daily Eco-Habits</h2>
+                            <p class="text-xs text-slate-400 font-semibold mt-0.5">Check completed habits to earn Eco Coins (EC)</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-black bg-emerald-100 text-emerald-800 px-3.5 py-1.5 rounded-full" x-text="habits.filter(h => h.checked).length + ' / 10 Done'"></span>
+                            <button @click="resetHabitsAndCoins()" class="text-[10px] font-extrabold uppercase text-red-600 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-full transition" title="Reset coins and checkboxes to 0">Reset (0 EC)</button>
+                        </div>
+                    </div>
+                    <div class="space-y-3">
+                        <template x-for="habit in habits" :key="habit.id">
+                            <label class="flex items-center justify-between p-4 bg-slate-50 rounded-2xl cursor-pointer border-2 transition" :class="habit.checked ? 'border-emerald-500 bg-emerald-50/40' : 'border-transparent hover:border-emerald-200'">
+                                <div class="flex items-center gap-3.5 pr-2">
+                                    <input type="checkbox" x-model="habit.checked" @change="updateStats()" class="w-5 h-5 rounded text-eco-600 border-slate-300 focus:ring-eco-500">
+                                    <div>
+                                        <span class="font-bold text-slate-800 text-sm block" x-text="habit.id + '. ' + habit.name"></span>
+                                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400" x-text="habit.category"></span>
+                                    </div>
+                                </div>
+                                <span class="text-[10px] font-black text-eco-700 bg-eco-100 px-3 py-1 rounded-full uppercase shrink-0" x-text="'+' + habit.val + ' EC'"></span>
+                            </label>
+                        </template>
+                    </div>
+                </div>
+
+                <div class="lg:col-span-6 space-y-8">
+                    <div class="bg-slate-900 p-10 rounded-[3rem] text-white shadow-2xl relative overflow-hidden">
+                        <div class="flex justify-between items-center mb-6">
+                            <h4 class="text-xs font-bold uppercase tracking-widest text-emerald-400">Live Impact Quantifier</h4>
+                            <span class="text-xs font-black bg-slate-800 text-emerald-300 px-3 py-1 rounded-full" x-text="getLevelInfo().title + ' ' + getLevelInfo().emoji"></span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-8">
+                            <div>
+                                <p class="text-4xl md:text-5xl font-black text-emerald-400" x-text="waterSaved"></p>
+                                <p class="text-xs text-slate-400 font-bold uppercase mt-2">Liters Water Preserved</p>
+                            </div>
+                            <div>
+                                <p class="text-4xl md:text-5xl font-black text-emerald-400" x-text="paperSaved.toFixed(2)"></p>
+                                <p class="text-xs text-slate-400 font-bold uppercase mt-2">KG Waste & Paper Conserved</p>
+                            </div>
+                        </div>
+                        <div class="mt-8 pt-6 border-t border-slate-800 font-bold text-emerald-200 text-sm text-center" x-text="impactEquiv"></div>
+                    </div>
+
+                    <!-- Eco-Shop -->
+                    <div class="bg-white p-10 rounded-[3rem] border border-slate-100 card-shadow">
+                        <div class="flex justify-between items-center mb-6">
+                            <h3 class="text-xl font-black uppercase text-slate-900 tracking-tight">Campus Rewards Marketplace</h3>
+                            <span class="text-xs font-black text-emerald-700 bg-emerald-50 px-3.5 py-1.5 rounded-full border border-emerald-200" x-text="'Balance: ' + user.coins + ' EC 🪙'"></span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <template x-for="item in marketplace" :key="item.name">
+                                <button @click="buyReward(item)" class="p-5 bg-slate-50 rounded-2xl text-center border-2 border-slate-100 hover:border-eco-500 hover:bg-white transition flex flex-col items-center">
+                                    <div class="text-4xl mb-2" x-text="item.icon"></div>
+                                    <p class="text-xs font-bold text-slate-700" x-text="item.name"></p>
+                                    <p class="text-xs font-black text-eco-600 mt-1" x-text="item.cost + ' EC'"></p>
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW: MOVEMENT (INTERNATIONAL ORGANIZATIONS) -->
+        <div x-show="activeTab === 'orgs'" x-transition x-cloak class="max-w-7xl mx-auto px-6 py-8 space-y-12">
+            <div class="text-center space-y-3">
+                <h2 class="text-4xl font-black uppercase tracking-tight text-slate-900">Global Movement Partners</h2>
+                <p class="text-slate-500 max-w-2xl mx-auto text-sm font-medium">Connecting campus sustainability efforts with leading international conservation authorities.</p>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+                <template x-for="org in globalOrgs" :key="org.name">
+                    <div class="bg-white border border-slate-100 rounded-[2.5rem] card-shadow overflow-hidden group hover:border-eco-500 transition-all flex flex-col h-full">
+                        <div class="h-44 w-full relative overflow-hidden bg-emerald-950">
+                            <img :src="org.image" 
+                                 onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?auto=format&fit=crop&w=800&q=80';" 
+                                 class="w-full h-full object-cover group-hover:scale-110 transition duration-700" 
+                                 :alt="org.name">
+                            <div class="absolute inset-0 bg-overlay"></div>
+                        </div>
+                        <div class="p-7 text-center flex-grow flex flex-col items-center relative z-10 -mt-10">
+                            <div class="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-eco-600 shadow-lg border-4 border-white">
+                                <i :data-lucide="org.icon" class="w-7 h-7"></i>
+                            </div>
+                            <h4 class="font-black text-sm uppercase text-slate-900 mt-4 tracking-wider" x-text="org.name"></h4>
+                            <p class="text-xs text-slate-500 leading-relaxed mt-3 flex-grow font-medium" x-text="org.desc"></p>
+                            <a :href="org.url" target="_blank" rel="noopener noreferrer" class="mt-6 inline-flex items-center gap-1 text-xs font-black text-emerald-600 uppercase tracking-wider hover:text-emerald-700 underline decoration-2 underline-offset-4">
+                                Visit Site &rarr;
+                            </a>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- VIEW: EVENTS HUB -->
+        <div x-show="activeTab === 'events'" x-transition x-cloak class="max-w-7xl mx-auto px-6 py-8 space-y-12">
+            <div class="grid lg:grid-cols-12 gap-10 items-start">
+                
+                <div class="lg:col-span-8 space-y-8">
+                    <div class="bg-white p-8 md:p-10 rounded-[3rem] card-shadow border border-slate-100">
+                        <div class="flex flex-wrap justify-between items-center gap-4 mb-8 pb-6 border-b border-slate-100">
+                            <div>
+                                <span class="text-xs font-black uppercase tracking-widest text-emerald-600 block">Affiliation: <span x-text="currentUser && currentUser.school ? currentUser.school : 'Independent / Open Community'"></span></span>
+                                <h2 class="text-3xl font-black text-slate-900 tracking-tight mt-1" x-text="monthNames[calMonth] + ' ' + calYear"></h2>
+                            </div>
+                            <div class="flex items-center gap-2 bg-slate-100 p-1.5 rounded-2xl">
+                                <button @click="prevMonth()" class="p-2.5 hover:bg-white rounded-xl transition text-slate-700 shadow-sm"><i data-lucide="chevron-left" class="w-5 h-5"></i></button>
+                                <button @click="goToToday()" class="px-4 py-2 text-xs font-extrabold uppercase tracking-wider text-slate-700 hover:bg-white rounded-xl transition">Today</button>
+                                <button @click="nextMonth()" class="p-2.5 hover:bg-white rounded-xl transition text-slate-700 shadow-sm"><i data-lucide="chevron-right" class="w-5 h-5"></i></button>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-7 gap-2 text-center mb-3">
+                            <template x-for="d in ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']">
+                                <div class="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 py-1" x-text="d"></div>
+                            </template>
+                        </div>
+
+                        <div class="calendar-grid">
+                            <template x-for="blank in getBlankDays()" :key="'blank-'+blank">
+                                <div class="calendar-cell empty"></div>
+                            </template>
+                            <template x-for="dayNum in getDaysInMonth()" :key="calYear + '-' + calMonth + '-' + dayNum">
+                                <div @click="selectedDay = dayNum" class="calendar-cell" :class="{'selected': selectedDay === dayNum, 'border-emerald-300 bg-emerald-50/40': getEventsForDay(dayNum).length > 0 && selectedDay !== dayNum}">
+                                    <div class="flex justify-between items-start">
+                                        <span class="text-xs font-extrabold w-6 h-6 flex items-center justify-center rounded-full" :class="selectedDay === dayNum ? 'bg-emerald-600 text-white' : 'text-slate-700'" x-text="dayNum"></span>
+                                        <span x-show="getEventsForDay(dayNum).length > 0" class="text-[10px] font-black bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-md" x-text="getEventsForDay(dayNum).length"></span>
+                                    </div>
+                                    <div class="space-y-1 mt-1 overflow-hidden">
+                                        <template x-for="ev in getEventsForDay(dayNum).slice(0, 2)" :key="ev.id">
+                                            <div class="text-[10px] font-bold bg-emerald-600 text-white px-2 py-0.5 rounded truncate" x-text="ev.title"></div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+
+                        <div class="mt-10 pt-8 border-t border-slate-100 space-y-4">
+                            <div class="flex justify-between items-center">
+                                <h4 class="text-sm font-black uppercase tracking-wider text-slate-500">
+                                    Scheduled Initiatives in <span class="text-emerald-600" x-text="monthNames[calMonth] + (selectedDay ? ' (Day ' + selectedDay + ')' : '')"></span>
+                                </h4>
+                                <button x-show="selectedDay !== null" @click="selectedDay = null" class="text-xs font-bold text-emerald-600 hover:underline">Show Entire Month</button>
+                            </div>
+
+                            <template x-if="getFilteredEvents().length === 0">
+                                <div class="p-8 bg-slate-50 rounded-3xl text-center space-y-2 border border-dashed border-slate-200">
+                                    <p class="text-slate-600 text-sm font-bold">No events scheduled for this period. Calendar is clean!</p>
+                                </div>
+                            </template>
+
+                            <div class="space-y-3">
+                                <template x-for="ev in getFilteredEvents()" :key="ev.id">
+                                    <div class="p-5 bg-slate-50 border border-slate-100 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                                        <div class="space-y-1">
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                <span class="text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full" x-text="ev.date"></span>
+                                                <span class="text-xs font-bold text-slate-400" x-text="'📍 ' + ev.location"></span>
+                                                <span x-show="ev.organizer" class="text-[10px] font-bold text-emerald-700 bg-white border border-slate-200 px-2 py-0.5 rounded-md" x-text="'Host: ' + ev.organizer"></span>
+                                            </div>
+                                            <h5 class="font-black text-slate-900 text-base" x-text="ev.title"></h5>
+                                            <p class="text-xs text-slate-500 font-medium" x-text="ev.desc"></p>
+                                        </div>
+                                        <div class="flex items-center gap-3 w-full sm:w-auto justify-end shrink-0">
+                                            <button @click="rsvpEvent(ev)" 
+                                                :class="hasAttended(ev.id) ? 'bg-slate-200 text-slate-700' : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow'"
+                                                class="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition"
+                                                x-text="hasAttended(ev.id) ? '✓ Going' : 'RSVP (+25 EC)'">
+                                            </button>
+                                            <button x-show="isDeveloper() || (currentUser && ev.organizer === currentUser.name)" @click="deleteEvent(ev.id)" class="px-3 py-2 bg-red-50 text-red-600 rounded-xl text-xs font-bold uppercase hover:bg-red-100">Delete</button>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Create Event Sidebar -->
+                <div class="lg:col-span-4 space-y-6">
+                    <!-- Role Event Counter Card -->
+                    <div class="bg-slate-900 text-white p-7 rounded-[2.5rem] shadow-xl space-y-2">
+                        <span class="text-[10px] font-black uppercase tracking-widest text-emerald-400" x-text="isOrg() ? 'Organization / Director Stats' : 'Volunteer Activity Stats'"></span>
+                        <div x-show="!isOrg()" class="flex justify-between items-end">
+                            <div>
+                                <p class="text-3xl font-black" x-text="user.attendedEvents.length"></p>
+                                <p class="text-xs text-slate-400 font-bold uppercase">Events Attended</p>
+                            </div>
+                            <span class="text-xs font-black bg-emerald-500/20 text-emerald-300 px-3 py-1 rounded-full">+15d Auto-Boost</span>
+                        </div>
+                        <div x-show="isOrg()" class="flex justify-between items-end">
+                            <div>
+                                <p class="text-3xl font-black" x-text="getHostedEventsCount()"></p>
+                                <p class="text-xs text-slate-400 font-bold uppercase">Events Hosted by You</p>
+                            </div>
+                            <span class="text-xs font-black bg-emerald-500/20 text-emerald-300 px-3 py-1 rounded-full">+30d Auto-Boost</span>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-8 rounded-[3rem] card-shadow border border-slate-100 space-y-6">
+                        <h3 class="text-xl font-black uppercase text-slate-900 tracking-tight">Propose Initiative</h3>
+                        <form @submit.prevent="createEvent()" class="space-y-4">
+                            <div>
+                                <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Event Title</label>
+                                <input type="text" x-model="newEvent.title" placeholder="e.g. Campus Clean-Up" class="w-full mt-1 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold focus:outline-none focus:border-emerald-500" required>
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Day (1-31)</label>
+                                    <input type="number" min="1" max="31" x-model="newEvent.day" class="w-full mt-1 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold focus:outline-none focus:border-emerald-500" required>
+                                </div>
+                                <div>
+                                    <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Month</label>
+                                    <select x-model="newEvent.month" class="w-full mt-1 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-700 focus:outline-none focus:border-emerald-500">
+                                        <template x-for="(m, idx) in monthNames" :key="m">
+                                            <option :value="idx" x-text="m"></option>
+                                        </template>
+                                    </select>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Location</label>
+                                <input type="text" x-model="newEvent.location" placeholder="e.g. Main Quad" class="w-full mt-1 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold focus:outline-none focus:border-emerald-500" required>
+                            </div>
+                            <div>
+                                <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Description</label>
+                                <textarea x-model="newEvent.desc" rows="3" placeholder="Brief details..." class="w-full mt-1 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold focus:outline-none focus:border-emerald-500" required></textarea>
+                            </div>
+                            <button type="submit" class="w-full eco-gradient text-white font-black py-4 rounded-2xl shadow-xl uppercase tracking-widest text-xs hover:opacity-95 transition">Publish Event</button>
+                        </form>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- VIEW: PROFILE -->
+        <div x-show="activeTab === 'profile'" x-transition x-cloak class="max-w-4xl mx-auto px-6 py-8 space-y-8">
+            <div class="bg-white p-10 rounded-[3.5rem] border border-slate-100 card-shadow flex flex-col md:flex-row items-center gap-8">
+                <div class="w-32 h-32 eco-gradient rounded-full flex items-center justify-center text-white text-5xl font-black shadow-xl shrink-0" x-text="currentUser ? currentUser.name.charAt(0).toUpperCase() : 'U'"></div>
+                <div class="space-y-3 text-center md:text-left flex-grow">
+                    <div class="flex flex-wrap items-center justify-center md:justify-start gap-3">
+                        <h2 class="text-3xl font-black text-slate-900 tracking-tight" x-text="currentUser ? currentUser.name : ''"></h2>
+                        <span class="text-xs font-black bg-emerald-100 text-emerald-800 px-3.5 py-1 rounded-full uppercase" x-text="isOrg() ? (currentUser.orgTitle || 'Verified Organization / Director') : 'Student / Volunteer Steward'"></span>
+                        <span x-show="isDeveloper()" class="text-xs font-black bg-slate-900 text-emerald-400 px-3 py-1 rounded-full uppercase">Developer</span>
+                    </div>
+                    <p class="text-sm font-semibold text-slate-400" x-text="currentUser ? currentUser.email : ''"></p>
+                    <p class="text-xs font-bold text-eco-600 uppercase tracking-widest">Institution: <span x-text="currentUser && currentUser.school ? currentUser.school : 'Independent / Open Community'"></span></p>
+                </div>
+                <button @click="signOut()" class="px-6 py-3 bg-red-50 text-red-600 border border-red-200 rounded-2xl text-xs font-black uppercase tracking-wider hover:bg-red-100 transition shrink-0">Sign Out</button>
+            </div>
+
+            <!-- ROLE SWITCHER CARD -->
+            <div class="bg-white p-8 md:p-10 rounded-[3rem] border border-slate-100 card-shadow space-y-6">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                    <div class="space-y-2">
+                        <div class="inline-flex items-center gap-2 bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">
+                            Account Role & Institutional Verification
+                        </div>
+                        <h3 class="text-2xl font-black text-slate-900 tracking-tight" x-text="isOrg() ? 'Verified Organization / School Director Mode' : 'Switch to Organization / Director Account'"></h3>
+                        <p class="text-xs text-slate-500 font-medium max-w-xl" x-text="isOrg() ? 'Your account is verified as an institutional organizer. We automatically track the total number of eco-initiatives and events you host.' : 'Are you a School Director, Faculty Coordinator, or Eco-Club Leader? Verify your institutional status to switch to an Organization account and track hosted initiatives.'"></p>
+                    </div>
+                    <div class="shrink-0">
+                        <button x-show="!isOrg()" @click="openOrgVerificationModal()" class="eco-gradient text-white px-7 py-4 rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl hover:opacity-95 transition">
+                            Verify & Switch to Organization &rarr;
+                        </button>
+                        <button x-show="isOrg()" @click="switchToIndividual()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-7 py-4 rounded-2xl text-xs font-black uppercase tracking-widest transition">
+                            Switch to Volunteer Account
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Detailed Progression & Tenure Stats in Profile -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div class="bg-slate-900 text-white p-7 rounded-[2.5rem] shadow-lg space-y-2">
+                    <span class="text-[10px] font-black uppercase tracking-widest text-emerald-400">Current Auto-Rank</span>
+                    <div class="flex items-center gap-3 pt-1">
+                        <span class="text-4xl" x-text="getLevelInfo().emoji"></span>
+                        <div>
+                            <p class="text-lg font-black leading-tight" x-text="getLevelInfo().title"></p>
+                            <p class="text-[10px] text-emerald-400 font-bold mt-1" x-text="getLevelInfo().tenureLabel"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white p-7 rounded-[2.5rem] border border-slate-100 card-shadow space-y-2">
+                    <span class="text-[10px] font-black uppercase tracking-widest text-slate-400">Accumulated Tenure</span>
+                    <p class="text-3xl font-black text-slate-900" x-text="getLevelInfo().effectiveDays + ' Days'"></p>
+                    <p class="text-xs text-emerald-600 font-bold" x-text="'Time online: ' + formatTimeSpent()"></p>
+                </div>
+
+                <div class="bg-white p-7 rounded-[2.5rem] border border-slate-100 card-shadow space-y-2">
+                    <span class="text-[10px] font-black uppercase tracking-widest text-slate-400">Events Attended</span>
+                    <p class="text-3xl font-black text-slate-900" x-text="user.attendedEvents.length"></p>
+                    <p class="text-xs text-emerald-600 font-bold">Volunteer Participation</p>
+                </div>
+
+                <div class="bg-white p-7 rounded-[2.5rem] border border-slate-100 card-shadow space-y-2">
+                    <span class="text-[10px] font-black uppercase tracking-widest text-slate-400">Events Hosted</span>
+                    <p class="text-3xl font-black text-slate-900" x-text="getHostedEventsCount()"></p>
+                    <p class="text-xs text-emerald-600 font-bold" x-text="isOrg() ? 'Director / Org Metric' : 'Created Initiatives'"></p>
+                </div>
+            </div>
+
+            <!-- Automatic Rank Roadmap -->
+            <div class="bg-white p-8 md:p-10 rounded-[3rem] border border-slate-100 card-shadow space-y-6">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-100 pb-4">
+                    <div>
+                        <h4 class="text-base font-black uppercase tracking-wider text-slate-900">Automatic Tenure & Activity Rank Roadmap</h4>
+                        <p class="text-xs text-slate-500 font-medium mt-0.5">Your rank upgrades automatically based on your registration date, active minutes online, and campus events.</p>
+                    </div>
+                    <span class="text-[11px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 px-3.5 py-1.5 rounded-full shrink-0" x-text="'Member since: ' + formatJoinDate()"></span>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-5 gap-3">
+                    <template x-for="milestone in getRankRoadmap()" :key="milestone.level">
+                        <div class="p-4 rounded-2xl border-2 flex flex-col justify-between transition"
+                             :class="getLevelInfo().effectiveDays >= milestone.reqDays ? 'border-emerald-500 bg-emerald-50/40' : 'border-slate-100 bg-slate-50 opacity-60'">
+                            <div class="flex justify-between items-start">
+                                <span class="text-2xl" x-text="milestone.emoji"></span>
+                                <span class="text-[9px] font-black uppercase px-2 py-0.5 rounded-full"
+                                      :class="getLevelInfo().effectiveDays >= milestone.reqDays ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-600'"
+                                      x-text="getLevelInfo().effectiveDays >= milestone.reqDays ? 'Unlocked' : milestone.period"></span>
+                            </div>
+                            <div class="mt-3">
+                                <p class="text-[10px] font-extrabold uppercase tracking-wider text-emerald-700" x-text="'Level ' + milestone.level"></p>
+                                <p class="text-xs font-black text-slate-900 mt-0.5 leading-snug" x-text="milestone.title"></p>
+                                <p class="text-[10px] font-bold text-slate-400 mt-1" x-text="milestone.reqDays + ' Days Required'"></p>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW: DEVELOPER INBOX -->
+        <div x-show="activeTab === 'inbox' && isDeveloper()" x-transition x-cloak class="max-w-5xl mx-auto px-6 py-8 space-y-8">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-6">
+                <div>
+                    <h2 class="text-3xl font-black uppercase tracking-tight text-slate-900">Developer Inbox</h2>
+                    <p class="text-xs text-slate-400 font-bold uppercase mt-1">Incoming community reports, feedback & event submissions</p>
+                </div>
+                <span class="bg-emerald-100 text-emerald-800 text-xs font-black px-4 py-1.5 rounded-full" x-text="feedbacks.length + ' items'"></span>
+            </div>
+            
+            <div class="space-y-4">
+                <template x-if="feedbacks.length === 0">
+                    <div class="p-12 bg-white rounded-3xl text-center border border-slate-100 shadow-sm">
+                        <p class="text-slate-400 text-sm font-bold">Inbox is completely clear!</p>
+                    </div>
+                </template>
+                <template x-for="(fb, idx) in feedbacks" :key="idx">
+                    <div class="bg-white p-6 rounded-3xl border border-slate-100 card-shadow flex justify-between items-start gap-4">
+                        <div class="space-y-2">
+                            <span class="text-[10px] font-black uppercase bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-md" x-text="fb.type || 'Feedback'"></span>
+                            <p class="text-sm font-bold text-slate-800" x-text="fb.message"></p>
+                            <p class="text-xs text-slate-400">From: <span class="font-bold text-slate-600" x-text="fb.author"></span></p>
+                        </div>
+                        <button @click="feedbacks.splice(idx, 1); syncToCloud()" class="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-200">Resolve</button>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- ORGANIZATION / DIRECTOR ROLE VERIFICATION MODAL -->
+    <div x-show="showOrgVerifyModal" x-transition x-cloak class="fixed inset-0 z-[260] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+        <div class="bg-white w-full max-w-md rounded-[3rem] p-8 md:p-10 shadow-2xl space-y-6 my-8 text-center">
+            <div class="w-16 h-16 bg-emerald-100 rounded-2xl flex items-center justify-center mx-auto text-emerald-600">
+                <i data-lucide="award" class="w-8 h-8"></i>
+            </div>
+            <div>
+                <h3 class="text-2xl font-black text-slate-900 tracking-tight uppercase">Organization / Director Verification</h3>
+                <p class="text-xs text-slate-500 font-medium mt-1">Verify your authority (e.g. School Director, Eco-Club Head, or Institution Admin) to unlock organizer tracking.</p>
+            </div>
+
+            <div class="space-y-4 text-left">
+                <div>
+                    <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Official Position / Title</label>
+                    <input type="text" x-model="orgVerifyForm.position" placeholder="e.g. School Director / Eco-Club President" class="w-full mt-1 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold focus:outline-none focus:border-emerald-500">
+                </div>
+                <div>
+                    <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">School / Organization Name</label>
+                    <input type="text" x-model="orgVerifyForm.school" placeholder="e.g. Green Valley High School" class="w-full mt-1 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold focus:outline-none focus:border-emerald-500">
+                </div>
+            </div>
+
+            <div class="bg-emerald-50 p-4 rounded-2xl border border-emerald-200">
+                <p class="text-[11px] font-bold text-emerald-800">🔐 Institutional Verification Code:</p>
+                <p class="text-2xl font-black text-emerald-700 tracking-widest mt-1" x-text="orgVerifyCode"></p>
+            </div>
+
+            <div>
+                <input type="text" x-model="orgVerifyInput" placeholder="Enter 6-digit code" class="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-center text-xl font-black tracking-widest focus:outline-none focus:border-emerald-500" maxlength="6">
+            </div>
+
+            <div class="flex gap-3 pt-2">
+                <button type="button" @click="showOrgVerifyModal = false" class="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl text-xs font-black uppercase tracking-wider hover:bg-slate-200 transition">Cancel</button>
+                <button type="button" @click="confirmOrgSwitch()" class="flex-1 py-4 eco-gradient text-white rounded-2xl text-xs font-black uppercase tracking-wider shadow-lg hover:opacity-95 transition">Verify & Switch</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ARTICLE EDITOR MODAL -->
+    <div x-show="showArticleModal" x-transition x-cloak class="fixed inset-0 z-[250] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+        <div class="bg-white w-full max-w-2xl rounded-[3rem] p-8 md:p-10 shadow-2xl space-y-6 my-8">
+            <h3 class="text-2xl font-black text-slate-900 tracking-tight" x-text="articleForm.id ? 'Edit Article' : 'Publish New Article'"></h3>
+            <form @submit.prevent="saveArticle()" class="space-y-4">
+                <div>
+                    <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Title</label>
+                    <input type="text" x-model="articleForm.title" placeholder="Article title..." class="w-full mt-1 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold focus:outline-none focus:border-emerald-500" required>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Category</label>
+                        <input type="text" x-model="articleForm.category" placeholder="e.g. ENERGY AUDIT" class="w-full mt-1 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold focus:outline-none focus:border-emerald-500" required>
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Read Time</label>
+                        <input type="text" x-model="articleForm.readTime" placeholder="e.g. 9 MIN READ" class="w-full mt-1 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold focus:outline-none focus:border-emerald-500" required>
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Primary Source</label>
+                        <input type="text" x-model="articleForm.source" placeholder="e.g. WRAP UK" class="w-full mt-1 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold focus:outline-none focus:border-emerald-500">
+                    </div>
+                </div>
+                <div>
+                    <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Cover Image URL</label>
+                    <input type="url" x-model="articleForm.image" placeholder="https://images.unsplash.com/..." class="w-full mt-1 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold focus:outline-none focus:border-emerald-500">
+                </div>
+                <div>
+                    <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Snippet / Summary</label>
+                    <textarea x-model="articleForm.snippet" rows="2" placeholder="Short preview text..." class="w-full mt-1 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold focus:outline-none focus:border-emerald-500" required></textarea>
+                </div>
+                <div>
+                    <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Full HTML Content</label>
+                    <textarea x-model="articleForm.content" rows="4" placeholder="<p>Full article text...</p>" class="w-full mt-1 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold focus:outline-none focus:border-emerald-500" required></textarea>
+                </div>
+                <div class="flex gap-3 pt-2">
+                    <button type="button" @click="showArticleModal = false" class="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl text-xs font-black uppercase tracking-wider hover:bg-slate-200 transition">Cancel</button>
+                    <button type="submit" class="flex-1 py-4 eco-gradient text-white rounded-2xl text-xs font-black uppercase tracking-wider shadow-lg hover:opacity-95 transition">Save Article</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- TOAST NOTIFICATION -->
+    <div x-show="toast.show" x-transition class="fixed bottom-6 right-6 z-[300] bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3">
+        <i data-lucide="check-circle" class="w-5 h-5 text-emerald-400"></i>
+        <span class="text-xs font-bold tracking-wide" x-text="toast.message"></span>
+    </div>
+
+    <!-- SCRIPTS & APP LOGIC WITH DUAL REAL-TIME SYNC (WEBSOCKET + REST POLLING) -->
+    <script>
+        const FIREBASE_DB_ROOT = "https://ecocampus-guide-default-rtdb.europe-west1.firebasedatabase.app/";
+        const FIREBASE_REST_URL = "https://ecocampus-guide-default-rtdb.europe-west1.firebasedatabase.app/ecocampus_shared.json";
+
+        const DEFAULT_ARTICLES = [
+            { 
+                id: 'art_1', 
+                title: 'Global Footprint Network — Carbon Accounting Metrics', 
+                category: 'CARBON ACCOUNTING', 
+                readTime: '9 MIN READ', 
+                source: 'Global Footprint Network — Carbon...',
+                author: 'Global Footprint Network', 
+                image: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=800&q=80',
+                snippet: 'Methodologies for measuring institutional carbon expenditure and building academic baseline footprints.', 
+                content: '<p>Institutional carbon accounting requires rigorous data collection across scope 1, 2, and 3 emissions. Educational facilities represent significant localized consumption hubs.</p>' 
+            },
+            { 
+                id: 'art_2', 
+                title: 'WRAP UK — Recycling in Schools & Campuses', 
+                category: 'RECYCLING PROTOCOL', 
+                readTime: '10 MIN READ', 
+                source: 'WRAP UK — Recycling in Schools &...',
+                author: 'WRAP UK', 
+                image: 'https://images.unsplash.com/photo-1532996122724-e3c3fa4a0d5c?auto=format&fit=crop&w=800&q=80',
+                snippet: 'Best practices for segregating organic waste and paper recycling streams across UK educational infrastructure.', 
+                content: '<p>WRAP guidelines indicate that standard school waste is over 80% recoverable when proper segregation bins are placed within high-traffic corridors.</p>' 
+            },
+            { 
+                id: 'art_3', 
+                title: 'WRAP UK — Food Waste in Schools Full Guide', 
+                category: 'FOOD SYSTEMS', 
+                readTime: '8 MIN READ', 
+                source: 'WRAP UK — Food Waste in Schools Full...',
+                author: 'WRAP UK', 
+                image: 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=800&q=80',
+                snippet: 'Actionable frameworks for minimizing cafeteria waste and composting organic leftovers.', 
+                content: '<p>Cafeteria food waste is the single largest contributor to campus landfill volume. Implementing portion tracking successfully reduces waste by 34%.</p>' 
+            },
+            { 
+                id: 'art_4', 
+                title: 'Campus Grid Optimization & Peak Load Reduction', 
+                category: 'ENERGY AUDIT', 
+                readTime: '9 MIN READ', 
+                source: 'EPA Energy Star — Schools',
+                author: 'EPA Energy Star', 
+                image: 'https://images.unsplash.com/photo-1473341304170-971dccb5ac1e?auto=format&fit=crop&w=800&q=80',
+                snippet: 'Auditing HVAC systems, laboratory equipment, and lighting schedules to cut institutional electricity waste.', 
+                content: '<p>Transitioning campus buildings to automated LED sensors and optimizing HVAC schedules reduces baseline kilowatt-hour expenditure by up to 28% annually.</p>' 
+            },
+            { 
+                id: 'art_5', 
+                title: 'IT Lifecycle & E-Waste Recovery Protocols', 
+                category: 'E-WASTE PROTOCOL', 
+                readTime: '10 MIN READ', 
+                source: 'UNEP — Global E-Waste Monitor',
+                author: 'UN Environment Programme', 
+                image: 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=800&q=80',
+                snippet: 'Safe decommissioning of laboratory computers, lithium batteries, and institutional hardware.', 
+                content: '<p>Academic institutions cycle through thousands of electronic devices. Certified e-waste recovery prevents heavy metal leaching and recovers valuable rare-earth minerals.</p>' 
+            },
+            { 
+                id: 'art_6', 
+                title: 'Institutional Greywater & Hydro-Conservation', 
+                category: 'WATER CONSERVATION', 
+                readTime: '8 MIN READ', 
+                source: 'Alliance for Water Efficiency',
+                author: 'Water Efficiency Institute', 
+                image: 'https://images.unsplash.com/photo-1548839140-29a749e1cf4d?auto=format&fit=crop&w=800&q=80',
+                snippet: 'Retrofitting campus restrooms, athletic facilities, and irrigation systems for net-zero water loss.', 
+                content: '<p>Low-flow laboratory aerators and rainwater harvesting systems allow modern campuses to cut municipal water reliance by over 40%.</p>' 
+            }
+        ];
+
+        const TEN_DEFAULT_HABITS = [
+            { id: 1, name: 'Brought reusable water bottle or thermos', category: 'Zero Waste', val: 10, checked: false },
+            { id: 2, name: 'Sorted paper, cardboard & plastic into recycling bins', category: 'Recycling', val: 15, checked: false },
+            { id: 3, name: 'Turned off lights & unplugged chargers when leaving', category: 'Energy', val: 20, checked: false },
+            { id: 4, name: 'Used digital notes instead of printing paper handouts', category: 'Paperless', val: 15, checked: false },
+            { id: 5, name: 'Chose a plant-based or zero-food-waste cafeteria meal', category: 'Food Systems', val: 25, checked: false },
+            { id: 6, name: 'Walked, cycled, or used public transit to reach campus', category: 'Mobility', val: 30, checked: false },
+            { id: 7, name: 'Refused single-use plastic bags, straws & cutlery', category: 'Plastic-Free', val: 15, checked: false },
+            { id: 8, name: 'Took stairs instead of the elevator', category: 'Energy Conservation', val: 10, checked: false },
+            { id: 9, name: 'Collected used batteries or small electronics for e-waste', category: 'E-Waste Protocol', val: 40, checked: false },
+            { id: 10, name: 'Participated in campus clean-up or shared an eco-guide', category: 'Stewardship', val: 50, checked: false }
+        ];
+
+        function ecoApp() {
+            return {
+                currentUser: null,
+                authMode: 'login',
+                pendingVerification: false,
+                generatedCode: '',
+                enteredCode: '',
+                authForm: { name: '', email: '', password: '', role: 'individual', school: '' },
+                
+                showOrgVerifyModal: false,
+                orgVerifyCode: '',
+                orgVerifyInput: '',
+                orgVerifyForm: { position: 'School Director', school: '' },
+
+                activeTab: 'dashboard',
+                mobileMenu: false,
+                cloudConnected: false,
+                searchQuery: '',
+                selectedArticle: null,
+                showArticleModal: false,
+                
+                toast: { show: false, message: '' },
+
+                user: { 
+                    coins: 0,
+                    spentCoins: 0,
+                    joinedAt: Date.now(),
+                    minutesSpent: 1,
+                    attendedEvents: [],
+                    hostedEventsCount: 0
+                },
+
+                habits: JSON.parse(JSON.stringify(TEN_DEFAULT_HABITS)),
+
+                marketplace: [
+                    { name: 'Eco Sticker Pack', cost: 50, icon: '🏷️' },
+                    { name: 'Cafeteria Green Pass', cost: 120, icon: '🥗' },
+                    { name: 'Reusable Metal Straw', cost: 200, icon: '✨' },
+                    { name: 'Tree Planting Sponsorship', cost: 350, icon: '🌳' }
+                ],
+
+                globalOrgs: [
+                    { name: 'Global Footprint Network', desc: 'Pioneering ecological footprint accounting worldwide.', url: 'https://www.footprintnetwork.org', image: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=800&q=80', icon: 'globe' },
+                    { name: 'WRAP UK', desc: 'Transforming resource use through systemic recycling protocols.', url: 'https://www.wrap.org.uk', image: 'https://images.unsplash.com/photo-1532996122724-e3c3fa4a0d5c?auto=format&fit=crop&w=800&q=80', icon: 'recycle' },
+                    { name: 'EPA Sustainable Schools', desc: 'US federal guidelines for institutional green infrastructure.', url: 'https://www.epa.gov', image: 'https://images.unsplash.com/photo-1497436072909-60f360e1d4b1?auto=format&fit=crop&w=800&q=80', icon: 'shield' },
+                    { name: 'Earth Day Network', desc: 'Mobilizing over 1 billion individuals globally for environmental action.', url: 'https://www.earthday.org', image: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80', icon: 'sun' },
+                    { name: 'UN Environment Programme', desc: 'The leading global voice advocating for environmental stewardship.', url: 'https://www.unep.org', image: 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=800&q=80', icon: 'award' }
+                ],
+
+                calMonth: new Date().getMonth(),
+                calYear: new Date().getFullYear(),
+                selectedDay: null,
+                monthNames: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
+
+                newEvent: { title: '', day: new Date().getDate(), month: new Date().getMonth(), location: '', desc: '' },
+                events: [],
+
+                articles: [...DEFAULT_ARTICLES],
+                deletedArticleIds: [],
+
+                feedbacks: [],
+                articleForm: { id: null, title: '', category: '', readTime: '', source: '', image: '', snippet: '', content: '' },
+
+                waterSaved: '0 L',
+                paperSaved: 0,
+                impactEquiv: 'Complete your first daily habit to start conserving campus resources!',
+
+                // Helper to normalize articles vs legacy numeric IDs (1..6 vs art_1..art_6)
+                isArticleDeleted(art) {
+                    if (!art) return true;
+                    const rawId = String(art.id);
+                    const altId = rawId.startsWith('art_') ? rawId.replace('art_', '') : ('art_' + rawId);
+                    return this.deletedArticleIds.includes(rawId) || 
+                           this.deletedArticleIds.includes(altId) || 
+                           this.deletedArticleIds.includes(art.title);
+                },
+
+                applyCloudState(data) {
+                    if (!data) return;
+                    if (data.deletedArticleIds) {
+                        const cloudDel = Array.isArray(data.deletedArticleIds) ? data.deletedArticleIds : Object.values(data.deletedArticleIds);
+                        this.deletedArticleIds = Array.from(new Set([...this.deletedArticleIds, ...cloudDel.map(String)]));
+                        try { localStorage.setItem('ecocampus_deleted_ids', JSON.stringify(this.deletedArticleIds)); } catch(e){}
+                    }
+
+                    if (data.articles) {
+                        const cloudArticles = Array.isArray(data.articles) ? data.articles : Object.values(data.articles);
+                        this.articles = cloudArticles
+                            .filter(a => a && !this.isArticleDeleted(a))
+                            .map(a => {
+                                const def = DEFAULT_ARTICLES.find(d => d.title === a.title || String(d.id) === String(a.id) || String(d.id) === ('art_' + a.id));
+                                return {
+                                    ...a,
+                                    image: a.image || (def ? def.image : 'https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?auto=format&fit=crop&w=800&q=80'),
+                                    source: a.source || a.author || (def ? def.source : 'EcoCampus Research')
+                                };
+                            });
+                    } else if (data.initialized) {
+                        this.articles = [];
+                    } else {
+                        this.articles = this.articles.filter(a => !this.isArticleDeleted(a));
+                    }
+
+                    if (this.selectedArticle && this.isArticleDeleted(this.selectedArticle)) {
+                        this.selectedArticle = null;
+                    }
+
+                    if (data.events) {
+                        this.events = Array.isArray(data.events) ? data.events : Object.values(data.events);
+                    } else if (data.initialized) {
+                        this.events = [];
+                    }
+
+                    if (data.feedbacks) {
+                        this.feedbacks = Array.isArray(data.feedbacks) ? data.feedbacks : Object.values(data.feedbacks);
+                    }
+                    this.
