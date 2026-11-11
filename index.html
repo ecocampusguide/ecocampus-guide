@@ -1,0 +1,2685 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EcoCampus Guide | Institutional Sustainability Intelligence</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js"></script>
+    <!-- Firebase Realtime Database SDK (Compat) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        eco: { 50: '#f0fdf4', 100: '#dcfce7', 500: '#10b981', 600: '#059669', 700: '#047857', 900: '#064e3b' }
+                    },
+                    fontFamily: { sans: ['Plus Jakarta Sans', 'sans-serif'] }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        [x-cloak] { display: none !important; }
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f8fafc; margin: 0; }
+        .eco-gradient { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+        .glass { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(226, 232, 240, 0.8); }
+        
+        .nav-link { 
+            font-size: 11px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: #64748b; 
+            transition: all 0.2s ease; padding: 7px 11px; border-radius: 99px;
+            display: inline-flex; align-items: center; cursor: pointer; white-space: nowrap; flex-shrink: 0;
+        }
+        .nav-link:hover { color: #059669; background-color: #f8fafc; }
+        .nav-link.active { color: #059669; background-color: #dcfce7; }
+
+        .card-shadow { box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.05); }
+        .bg-overlay { background: linear-gradient(to bottom, rgba(0,0,0,0.02) 0%, rgba(0,0,0,0.55) 100%); }
+        
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+        .calendar-cell { 
+            min-height: 76px; border-radius: 16px; padding: 8px; transition: all 0.2s ease; 
+            display: flex; flex-direction: column; justify-content: space-between; cursor: pointer;
+            border: 1.5px solid #f1f5f9; background: #ffffff;
+        }
+        .calendar-cell:hover { border-color: #10b981; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(16, 185, 129, 0.08); }
+        .calendar-cell.selected { border-color: #059669; background-color: #f0fdf4; }
+        .calendar-cell.empty { background: transparent; border-color: transparent; cursor: default; }
+        .calendar-cell.empty:hover { transform: none; box-shadow: none; }
+    </style>
+</head>
+<body x-data="ecoApp()" x-init="init()" class="h-full overflow-x-hidden text-slate-900 selection:bg-eco-100 flex flex-col min-h-screen">
+
+    <!-- 1. AUTHENTICATION & REGISTRATION MODAL -->
+    <div x-show="!currentUser" x-transition.opacity class="fixed inset-0 z-[200] eco-gradient flex items-center justify-center p-4 overflow-y-auto">
+        <div class="max-w-md w-full bg-white rounded-[2.5rem] shadow-2xl p-8 md:p-10 text-left my-8">
+            <div class="text-center mb-8">
+                <div class="w-16 h-16 bg-eco-50 rounded-2xl flex items-center justify-center text-eco-600 mx-auto mb-4 shadow-sm border border-eco-100">
+                    <i data-lucide="leaf" class="w-8 h-8"></i>
+                </div>
+                <h1 class="text-2xl font-black tracking-tight text-slate-900">EcoCampus Guide</h1>
+                <p class="text-slate-500 text-xs font-medium mt-1">Institutional Sustainability Intelligence</p>
+            </div>
+
+            <!-- Verification Step Modal Overlay Inside Auth -->
+            <div x-show="pendingVerification" class="space-y-6 text-center">
+                <div class="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto text-emerald-600">
+                    <i data-lucide="shield-check" class="w-8 h-8"></i>
+                </div>
+                <div>
+                    <h3 class="text-xl font-black uppercase text-slate-900">Verify Your Account</h3>
+                    <p class="text-xs text-slate-500 mt-2">We sent a 6-digit confirmation code to <span class="font-bold text-slate-800" x-text="authForm.email"></span>.</p>
+                </div>
+                
+                <div class="bg-emerald-50 p-4 rounded-2xl border border-emerald-200">
+                    <p class="text-[11px] font-bold text-emerald-800">💡 Verification Code:</p>
+                    <p class="text-2xl font-black text-emerald-700 tracking-widest mt-1" x-text="generatedCode"></p>
+                </div>
+
+                <div>
+                    <input type="text" x-model="enteredCode" placeholder="Enter 6-digit code" class="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-center text-xl font-black tracking-widest focus:outline-none focus:border-emerald-500" maxlength="6">
+                </div>
+
+                <button @click="verifyAndCompleteAuth()" class="w-full eco-gradient text-white font-black py-4 rounded-2xl shadow-xl uppercase tracking-widest text-xs hover:opacity-95 transition">
+                    Confirm & Enter Platform
+                </button>
+                <button @click="pendingVerification = false" class="text-xs font-bold text-slate-400 hover:text-slate-600 uppercase">Back to Register</button>
+            </div>
+
+            <!-- Standard Auth Form -->
+            <div x-show="!pendingVerification">
+                <div class="flex bg-slate-100 p-1 rounded-2xl mb-6">
+                    <button type="button" @click="authMode = 'login'" :class="authMode === 'login' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'" class="flex-1 py-2.5 text-xs font-black uppercase tracking-wider rounded-xl transition">
+                        Sign In
+                    </button>
+                    <button type="button" @click="authMode = 'register'" :class="authMode === 'register' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'" class="flex-1 py-2.5 text-xs font-black uppercase tracking-wider rounded-xl transition">
+                        Register
+                    </button>
+                </div>
+
+                <form @submit.prevent="handleAuth()" class="space-y-4">
+                    <div x-show="authMode === 'register'">
+                        <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Full Name / Username</label>
+                        <input type="text" x-model="authForm.name" placeholder="e.g. Alex Mercer" class="w-full mt-1 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold focus:outline-none focus:border-emerald-500">
+                    </div>
+
+                    <div>
+                        <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Email / Login</label>
+                        <input type="text" x-model="authForm.email" placeholder="name@example.com" class="w-full mt-1 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold focus:outline-none focus:border-emerald-500" required>
+                    </div>
+
+                    <div>
+                        <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Password</label>
+                        <input type="password" x-model="authForm.password" placeholder="••••••••" class="w-full mt-1 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold focus:outline-none focus:border-emerald-500" required>
+                    </div>
+
+                    <div class="space-y-4 pt-2">
+                        <div>
+                            <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Account Role</label>
+                            <select x-model="authForm.role" class="w-full mt-1 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-700 focus:outline-none focus:border-emerald-500">
+                                <option value="individual">Student / Volunteer (Steward)</option>
+                                <option value="org">Organization / School Director</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <div class="flex justify-between items-center ml-1">
+                                <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400">School / Institution (Optional)</label>
+                                <span class="text-[9px] font-bold text-emerald-600 uppercase">Can be changed later</span>
+                            </div>
+                            <input type="text" x-model="authForm.school" placeholder="Leave blank if independent, or enter your institution" class="w-full mt-1 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold focus:outline-none focus:border-emerald-500">
+                        </div>
+                    </div>
+
+                    <button type="submit" class="w-full eco-gradient text-white font-black py-4 rounded-2xl shadow-xl uppercase tracking-widest text-xs hover:opacity-95 active:scale-95 transition mt-6" x-text="authMode === 'login' ? 'Enter Dashboard' : 'Proceed to Verification'">
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. NAVIGATION BAR (SINGLE-LINE NON-WRAPPING CATALOG BAR) -->
+    <nav class="fixed top-0 w-full z-50 glass h-16 md:h-20 flex items-center" x-show="currentUser" x-cloak>
+        <div class="max-w-7xl mx-auto px-4 md:px-6 w-full flex justify-between items-center gap-2 flex-nowrap">
+            <div class="flex items-center gap-2 cursor-pointer shrink-0" @click="activeTab = 'dashboard'; selectedArticle = null">
+                <div class="p-2 bg-eco-600 rounded-xl text-white shadow-lg shadow-eco-200 shrink-0"><i data-lucide="leaf" class="w-5 h-5"></i></div>
+                <span class="font-black text-lg xl:text-xl tracking-tighter uppercase text-emerald-950 whitespace-nowrap">EcoCampus</span>
+                <button @click.stop="forceSync()" class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 transition shrink-0" title="Click to force cloud sync across devices">
+                    <span :class="cloudConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'" class="w-2 h-2 rounded-full shrink-0"></span>
+                    <span class="text-[9px] font-black uppercase tracking-wider text-emerald-800 whitespace-nowrap" x-text="cloudConnected ? 'Synced' : 'Sync Cloud'"></span>
+                </button>
+            </div>
+
+            <div class="hidden lg:flex gap-1 items-center flex-nowrap shrink-0">
+                <template x-for="tab in getTabs()" :key="tab.id">
+                    <button @click="activeTab = tab.id; if(tab.id === 'challenge') challengeView = 'catalog'; selectedArticle = null; mobileMenu = false" 
+                        :class="activeTab === tab.id ? 'active' : ''" 
+                        class="nav-link" x-text="tab.name"></button>
+                </template>
+                <!-- Developer Exclusive Inbox Tab -->
+                <button x-show="isDeveloper()" @click="activeTab = 'inbox'; selectedArticle = null; mobileMenu = false" 
+                    :class="activeTab === 'inbox' ? 'active' : ''" 
+                    class="nav-link relative text-emerald-700">
+                    <span>Inbox</span>
+                    <span x-show="feedbacks.length > 0" class="ml-1.5 bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full" x-text="feedbacks.length"></span>
+                </button>
+                <button @click="activeTab = 'profile'; selectedArticle = null; mobileMenu = false" :class="activeTab === 'profile' ? 'active' : ''" class="nav-link">Profile</button>
+            </div>
+
+            <div class="flex items-center gap-2 shrink-0">
+                <div class="hidden sm:flex bg-slate-900 text-white px-3 py-1.5 rounded-full items-center gap-1.5 cursor-pointer shrink-0 whitespace-nowrap" @click="activeTab = 'profile'" title="Your Tenure Level">
+                    <span class="text-xs" x-text="getLevelInfo().emoji">🌱</span>
+                    <span class="text-[10px] font-black uppercase tracking-wider text-emerald-400" x-text="getLevelInfo().shortBadge"></span>
+                </div>
+                <div class="hidden sm:flex bg-emerald-50 px-3.5 py-1.5 rounded-full border border-emerald-200 items-center gap-1.5 font-bold cursor-pointer shrink-0 whitespace-nowrap" @click="activeTab = 'tracker'">
+                    <span class="text-xs font-black text-emerald-700 uppercase" x-text="user.coins + ' EC 🪙'"></span>
+                </div>
+                <button @click="mobileMenu = !mobileMenu" class="lg:hidden p-2 text-slate-600"><i data-lucide="menu"></i></button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- MOBILE MENU -->
+    <div x-show="mobileMenu" x-transition x-cloak class="fixed inset-0 z-[90] bg-white pt-24 px-8 lg:hidden overflow-y-auto">
+        <div class="flex flex-col gap-5 text-2xl font-black uppercase tracking-tight text-left pb-12">
+            <template x-for="tab in getTabs()" :key="tab.id">
+                <button @click="activeTab = tab.id; if(tab.id === 'challenge') challengeView = 'catalog'; selectedArticle = null; mobileMenu = false" 
+                    :class="activeTab === tab.id ? 'text-eco-600' : 'text-slate-500'" 
+                    x-text="tab.name" class="text-left py-2 border-b border-slate-100"></button>
+            </template>
+            <button x-show="isDeveloper()" @click="activeTab = 'inbox'; selectedArticle = null; mobileMenu = false" :class="activeTab === 'inbox' ? 'text-eco-600' : 'text-slate-500'" class="text-left py-2 border-b border-slate-100">Inbox (<span x-text="feedbacks.length"></span>)</button>
+            <button @click="activeTab = 'profile'; selectedArticle = null; mobileMenu = false" :class="activeTab === 'profile' ? 'text-eco-600' : 'text-slate-500'" class="text-left py-2">Profile</button>
+        </div>
+    </div>
+
+    <!-- 3. MAIN CONTENT -->
+    <main class="pt-20 md:pt-28 pb-16 flex-grow" x-show="currentUser" x-cloak>
+        
+        <!-- VIEW: DASHBOARD -->
+        <div x-show="activeTab === 'dashboard'" x-transition class="max-w-7xl mx-auto px-6 space-y-16 py-6">
+            <div class="grid lg:grid-cols-12 gap-12 items-center">
+                <div class="lg:col-span-7 space-y-6 text-center lg:text-left">
+                    <div class="inline-flex items-center gap-2 bg-emerald-50 border border-emerald-200 px-4 py-1.5 rounded-full text-emerald-700 text-xs font-bold uppercase tracking-widest">
+                        Affiliation: <span x-text="currentUser && currentUser.school ? currentUser.school : 'Independent / Open Community'"></span>
+                    </div>
+                    <h1 class="text-5xl md:text-7xl font-black text-slate-900 leading-tight tracking-tighter">
+                        Toward an <span class="text-eco-600">Institutional</span> <br>Zero-Waste Future.
+                    </h1>
+                    <p class="text-lg text-slate-500 max-w-2xl font-medium leading-relaxed">
+                        EcoCampus Guide provides data-driven protocols to mitigate the 180M kg school waste crisis through active student, volunteer & organizational stewardship.
+                    </p>
+                    <div class="flex flex-wrap gap-4 justify-center lg:justify-start pt-2">
+                        <button @click="activeTab = 'challenge'; challengeView = 'catalog'" class="eco-gradient text-white px-8 py-4 rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl hover:opacity-95 transition flex items-center gap-2">
+                            <span>Interactive Challenges</span>
+                            <span>&rarr;</span>
+                        </button>
+                        <button @click="activeTab = 'tracker'" class="bg-slate-900 text-emerald-400 px-8 py-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-slate-800 transition shadow-lg">
+                            Daily Eco-Habits &rarr;
+                        </button>
+                        <button @click="activeTab = 'profile'" class="bg-white border border-slate-200 text-slate-700 px-7 py-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:border-emerald-500 transition shadow-sm">
+                            Role & Rank
+                        </button>
+                    </div>
+                </div>
+
+                <!-- TENURE & EVENT LEVEL PROGRESSION CARD -->
+                <div class="lg:col-span-5 bg-slate-900 p-8 md:p-10 rounded-[3.5rem] text-white shadow-2xl space-y-6 relative overflow-hidden border border-slate-800">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-5">
+                        <div class="flex items-center gap-4 text-left">
+                            <div class="text-6xl bg-slate-800/90 w-20 h-20 rounded-3xl flex items-center justify-center border border-slate-700 shadow-inner shrink-0" x-text="getLevelInfo().emoji">🌱</div>
+                            <div>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <span class="text-[10px] font-black uppercase tracking-widest bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full border border-emerald-500/30" x-text="'Level ' + getLevelInfo().level"></span>
+                                    <span class="text-[10px] font-black uppercase tracking-widest bg-slate-800 text-slate-300 px-2.5 py-1 rounded-full" x-text="getLevelInfo().tenureLabel"></span>
+                                </div>
+                                <h3 class="text-xl md:text-2xl font-black text-white uppercase tracking-tight mt-2" x-text="getLevelInfo().title"></h3>
+                                <p class="text-[11px] text-slate-400 font-semibold mt-0.5" x-text="getLevelInfo().nextMilestoneText"></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Milestone Progress Bar -->
+                    <div class="space-y-2 text-left">
+                        <div class="flex justify-between text-xs font-extrabold uppercase tracking-wider">
+                            <span class="text-emerald-400">Rank Progress</span>
+                            <span class="text-slate-400" x-text="getLevelInfo().days + ' / ' + getLevelInfo().nextTargetDays + ' Days (' + getLevelInfo().progress + '%)'"></span>
+                        </div>
+                        <div class="w-full h-3.5 bg-slate-800 rounded-full overflow-hidden p-0.5 border border-slate-700">
+                            <div class="h-full eco-gradient rounded-full transition-all duration-500" :style="'width: ' + getLevelInfo().progress + '%'"></div>
+                        </div>
+                        <div class="flex justify-between text-[9px] font-bold uppercase tracking-wider text-slate-500 pt-1">
+                            <span>Day 1</span>
+                            <span>1 Month</span>
+                            <span>3 Months</span>
+                            <span>6 Months</span>
+                            <span>1 Year+</span>
+                        </div>
+                    </div>
+
+                    <!-- Days & Events Metrics Grid -->
+                    <div class="grid grid-cols-2 gap-3 pt-2">
+                        <div class="bg-slate-800/70 border border-slate-700/70 p-4 rounded-2xl text-left">
+                            <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Days in Project</span>
+                            <span class="text-2xl font-black text-white mt-1 block" x-text="getLevelInfo().days"></span>
+                            <span class="text-[10px] text-emerald-400 font-bold" x-text="'Since ' + formatJoinDate()"></span>
+                        </div>
+
+                        <!-- If Individual / Student: Show Events Attended -->
+                        <div x-show="!isOrg()" class="bg-slate-800/70 border border-slate-700/70 p-4 rounded-2xl text-left">
+                            <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Events Attended</span>
+                            <span class="text-2xl font-black text-emerald-400 mt-1 block" x-text="user.attendedEvents.length"></span>
+                            <span class="text-[10px] text-slate-400 font-bold">Volunteer Participation</span>
+                        </div>
+
+                        <!-- If Organization / Director: Show Events Hosted -->
+                        <div x-show="isOrg()" class="bg-slate-800/70 border border-slate-700/70 p-4 rounded-2xl text-left">
+                            <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Events Hosted</span>
+                            <span class="text-2xl font-black text-emerald-400 mt-1 block" x-text="getHostedEventsCount()"></span>
+                            <span class="text-[10px] text-slate-400 font-bold">Organized Initiatives</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stats -->
+            <section class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div class="p-10 bg-white border border-slate-100 rounded-[2.5rem] card-shadow">
+                    <p class="text-eco-600 font-bold uppercase text-xs tracking-widest mb-3">School Waste Scale</p>
+                    <h3 class="text-5xl font-black text-slate-900 leading-none">180M <span class="text-xl opacity-40 font-normal">kg</span></h3>
+                    <p class="text-slate-500 text-sm mt-4 font-medium">Aggregate waste generated annually across 24,000 UK schools (WRAP).</p>
+                </div>
+                <div class="p-10 bg-slate-900 rounded-[2.5rem] text-white shadow-xl">
+                    <p class="text-eco-400 font-bold uppercase text-xs tracking-widest mb-3">The Recovery Gap</p>
+                    <h3 class="text-5xl font-black text-white leading-none">20% <span class="text-xl opacity-40 font-normal text-slate-400">Actual</span></h3>
+                    <p class="text-slate-400 text-sm mt-4 leading-relaxed font-medium">Current recycling rate despite 80% theoretical institutional recoverability.</p>
+                </div>
+                <div class="p-10 bg-white border border-slate-100 rounded-[2.5rem] card-shadow">
+                    <p class="text-blue-600 font-bold uppercase text-xs tracking-widest mb-3">USA Daily Context</p>
+                    <h3 class="text-4xl font-black leading-none uppercase tracking-tight">14,500 <span class="text-lg opacity-40 font-normal">Tonnes/Day</span></h3>
+                    <p class="text-slate-500 text-sm mt-4 font-medium">EPA Research: Daily waste output from US public schools.</p>
+                </div>
+            </section>
+        </div>
+
+        <!-- VIEW: ECO CHALLENGE HUB (CATALOG WITH USER CHOICE + SEPARATE QUIZ & SORTING VIEWS) -->
+        <div x-show="activeTab === 'challenge'" x-transition x-cloak class="max-w-7xl mx-auto px-6 py-8 space-y-10">
+            
+            <!-- 1. CATALOG VIEW (USER CHOOSES BETWEEN QUIZ OR SORTING GAME) -->
+            <div x-show="challengeView === 'catalog'" x-transition class="space-y-10">
+                <!-- Catalog Header Banner -->
+                <div class="bg-slate-900 text-white p-8 md:p-10 rounded-[3rem] shadow-2xl border border-slate-800 flex flex-col lg:flex-row justify-between items-center gap-6">
+                    <div class="space-y-2 text-center lg:text-left">
+                        <div class="inline-flex items-center gap-2 bg-emerald-500/20 text-emerald-400 px-3.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-emerald-500/30">
+                            <span>Interactive Sustainability Directory</span>
+                            <span>•</span>
+                            <span x-text="getTodayDateLabel()"></span>
+                        </div>
+                        <h2 class="text-3xl md:text-4xl font-black uppercase tracking-tight mt-1">Eco Challenge Catalog</h2>
+                        <p class="text-slate-400 text-xs md:text-sm max-w-2xl font-medium">Select an interactive activity below to test your environmental knowledge or practice zero-waste segregation. Every correct answer rewards you with Eco Coins (EC).</p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4 shrink-0 w-full lg:w-auto">
+                        <div class="bg-slate-800/90 border border-slate-700 px-6 py-4 rounded-2xl text-center">
+                            <span class="text-2xl font-black text-emerald-400 block" x-text="getFilteredQuizBank().length"></span>
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-300">Quiz Questions</span>
+                        </div>
+                        <div class="bg-slate-800/90 border border-slate-700 px-6 py-4 rounded-2xl text-center">
+                            <span class="text-2xl font-black text-emerald-400 block" x-text="getFilteredSortBank().length"></span>
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-300">Sorting Items</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2 Catalog Cards Side-by-Side -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    
+                    <!-- CATALOG CARD 1: DAILY ECO-IQ QUIZ -->
+                    <div class="bg-white border-2 border-slate-200/80 rounded-[3rem] card-shadow overflow-hidden group hover:border-emerald-500 hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between">
+                        <div>
+                            <!-- Vector Landscape Header -->
+                            <div class="h-56 w-full relative overflow-hidden bg-emerald-950">
+                                <div class="w-full h-full group-hover:scale-105 transition duration-700"
+                                     x-html="getInlineBannerHtml('ocean', 'DAILY ECO-IQ QUIZ', 'ROTATING 5-QUESTION ASSESSMENT')"></div>
+                                <div class="absolute top-4 left-4 right-4 flex justify-between items-center z-10">
+                                    <span class="bg-white/95 backdrop-blur px-3.5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider text-slate-900 shadow-sm">
+                                        🧠 Knowledge Assessment
+                                    </span>
+                                    <span class="bg-emerald-500 text-white px-3.5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider shadow-sm">
+                                        Up to +50 EC 🪙
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- Card Body -->
+                            <div class="p-8 pt-0 space-y-5 relative z-10">
+                                <div class="flex justify-between items-end -mt-8">
+                                    <div class="w-16 h-16 bg-white rounded-2xl flex items-center justify-center shadow-lg border-4 border-white text-3xl">
+                                        🧠
+                                    </div>
+                                    <span class="text-[10px] font-black uppercase tracking-widest text-sky-700 bg-sky-50 border border-sky-200 px-3.5 py-1.5 rounded-xl">
+                                        New Questions Daily
+                                    </span>
+                                </div>
+
+                                <div>
+                                    <h3 class="text-2xl font-black uppercase text-slate-900 tracking-tight group-hover:text-emerald-600 transition">Daily Eco-IQ Quiz</h3>
+                                    <p class="text-xs md:text-sm text-slate-500 leading-relaxed mt-2 font-medium">
+                                        Test your environmental intuition on 5 rotating questions covering campus energy audits, recycling science, biodiversity, and water conservation. Includes instant scientific explanations after each answer.
+                                    </p>
+                                </div>
+
+                                <!-- Feature Pills -->
+                                <div class="flex flex-wrap gap-2">
+                                    <span class="text-[10px] font-bold bg-slate-100 text-slate-700 px-3 py-1.5 rounded-xl">5 Questions per Round</span>
+                                    <span class="text-[10px] font-bold bg-slate-100 text-slate-700 px-3 py-1.5 rounded-xl">Scientific Fact Cards</span>
+                                    <span class="text-[10px] font-bold bg-slate-100 text-slate-700 px-3 py-1.5 rounded-xl">Instant Eco-Certificate</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card Footer & Launch Button -->
+                        <div class="px-8 pb-8 pt-4 border-t border-slate-100 space-y-4">
+                            <div class="bg-slate-50 px-4 py-3 rounded-2xl flex items-center justify-between">
+                                <span class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Reward Rate</span>
+                                <span class="text-xs font-black text-emerald-700">+10 EC per Correct Answer</span>
+                            </div>
+                            <button @click="challengeView = 'quiz'" class="w-full py-4 px-6 eco-gradient text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg hover:opacity-95 transition flex items-center justify-center gap-2">
+                                <span>Launch Eco-IQ Quiz</span>
+                                <span>&rarr;</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- CATALOG CARD 2: WASTE SORTING BLITZ -->
+                    <div class="bg-white border-2 border-slate-200/80 rounded-[3rem] card-shadow overflow-hidden group hover:border-emerald-500 hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between">
+                        <div>
+                            <!-- Vector Landscape Header -->
+                            <div class="h-56 w-full relative overflow-hidden bg-emerald-950">
+                                <div class="w-full h-full group-hover:scale-105 transition duration-700"
+                                     x-html="getInlineBannerHtml('recycle', 'WASTE SORTING BLITZ', 'ZERO-WASTE SEGREGATION SIMULATOR')"></div>
+                                <div class="absolute top-4 left-4 right-4 flex justify-between items-center z-10">
+                                    <span class="bg-white/95 backdrop-blur px-3.5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider text-slate-900 shadow-sm">
+                                        ♻️ Interactive Mini-Game
+                                    </span>
+                                    <span class="bg-emerald-500 text-white px-3.5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider shadow-sm">
+                                        Up to +60 EC 🪙
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- Card Body -->
+                            <div class="p-8 pt-0 space-y-5 relative z-10">
+                                <div class="flex justify-between items-end -mt-8">
+                                    <div class="w-16 h-16 bg-white rounded-2xl flex items-center justify-center shadow-lg border-4 border-white text-3xl">
+                                        ♻️
+                                    </div>
+                                    <span class="text-[10px] font-black uppercase tracking-widest text-emerald-700 bg-emerald-50 border border-emerald-200 px-3.5 py-1.5 rounded-xl">
+                                        4 Recycling Streams
+                                    </span>
+                                </div>
+
+                                <div>
+                                    <h3 class="text-2xl font-black uppercase text-slate-900 tracking-tight group-hover:text-emerald-600 transition">Waste Sorting Blitz</h3>
+                                    <p class="text-xs md:text-sm text-slate-500 leading-relaxed mt-2 font-medium">
+                                        Practice real-world campus waste segregation! Sort everyday school items (coffee cups, batteries, PET bottles, pizza boxes, lab e-waste) into Paper, Plastic &amp; Metal, E-Waste, or Organic bins.
+                                    </p>
+                                </div>
+
+                                <!-- Feature Pills -->
+                                <div class="flex flex-wrap gap-2">
+                                    <span class="text-[10px] font-bold bg-slate-100 text-slate-700 px-3 py-1.5 rounded-xl">6 Items per Blitz</span>
+                                    <span class="text-[10px] font-bold bg-slate-100 text-slate-700 px-3 py-1.5 rounded-xl">Real Contamination Traps</span>
+                                    <span class="text-[10px] font-bold bg-slate-100 text-slate-700 px-3 py-1.5 rounded-xl">Instant Sorting Tips</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card Footer & Launch Button -->
+                        <div class="px-8 pb-8 pt-4 border-t border-slate-100 space-y-4">
+                            <div class="bg-slate-50 px-4 py-3 rounded-2xl flex items-center justify-between">
+                                <span class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Reward Rate</span>
+                                <span class="text-xs font-black text-emerald-700">+10 EC per Sorted Item</span>
+                            </div>
+                            <button @click="challengeView = 'sorting'" class="w-full py-4 px-6 bg-slate-900 hover:bg-emerald-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg transition flex items-center justify-center gap-2">
+                                <span>Launch Sorting Blitz</span>
+                                <span>&rarr;</span>
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- 2. SEPARATE VIEW: DAILY ECO-IQ QUIZ -->
+            <div x-show="challengeView === 'quiz'" x-transition class="space-y-8">
+                
+                <!-- Top Navigation Bar inside Quiz -->
+                <div class="flex flex-wrap justify-between items-center gap-4 bg-white p-5 px-7 rounded-3xl border border-slate-100 card-shadow">
+                    <button @click="challengeView = 'catalog'" class="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-2xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2">
+                        <span>&larr; Back to Challenge Catalog</span>
+                    </button>
+                    <div class="flex items-center gap-3">
+                        <span class="text-xs font-black uppercase tracking-wider text-slate-400">Active Mode: <strong class="text-emerald-600">🧠 Daily Eco-IQ Quiz</strong></span>
+                        <button @click="challengeView = 'sorting'" class="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-xl text-[11px] font-black uppercase tracking-wider transition">
+                            Switch to Sorting Blitz ♻️
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Active Quiz Card -->
+                <div x-show="!quizCompleted && getActiveQuizSet().length > 0" class="bg-white p-8 md:p-12 rounded-[3rem] border border-slate-100 card-shadow space-y-8">
+                    <div class="flex flex-wrap justify-between items-center gap-4 border-b border-slate-100 pb-6">
+                        <div class="flex items-center gap-3">
+                            <span class="bg-emerald-100 text-emerald-800 text-xs font-black px-4 py-1.5 rounded-full uppercase tracking-wider"
+                                  x-text="'Question ' + (quizIndex + 1) + ' of ' + getActiveQuizSet().length"></span>
+                            <span class="text-xs font-bold text-slate-400" x-text="quizShuffleSeed === 0 ? '📅 Daily Rotating Set' : '🎲 Custom Shuffled Set'"></span>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <span class="text-xs font-black text-emerald-600 uppercase" x-text="'Score: ' + quizScore + ' / ' + getActiveQuizSet().length"></span>
+                            <button @click="shuffleQuizSet()" class="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[11px] font-black uppercase tracking-wider transition">
+                                🎲 Shuffle 5 New Questions
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Progress Bar -->
+                    <div class="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                        <div class="h-full eco-gradient transition-all duration-300" :style="'width: ' + (((quizIndex + 1) / getActiveQuizSet().length) * 100) + '%'"></div>
+                    </div>
+
+                    <!-- Question Text -->
+                    <div class="space-y-2">
+                        <span class="text-[10px] font-black uppercase tracking-widest text-emerald-600" x-text="getCurrentQuestion().category || 'SUSTAINABILITY SCIENCE'"></span>
+                        <h3 class="text-2xl md:text-3xl font-black text-slate-900 leading-snug" x-text="getCurrentQuestion().question"></h3>
+                    </div>
+
+                    <!-- 4 Answer Options -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <template x-for="(opt, idx) in getCurrentQuestion().options" :key="idx">
+                            <button @click="selectQuizAnswer(idx)"
+                                    :disabled="quizSelected !== null"
+                                    :class="{
+                                        'border-slate-200 bg-slate-50 hover:border-emerald-500 hover:bg-white text-slate-800': quizSelected === null,
+                                        'border-emerald-500 bg-emerald-50 text-emerald-950 ring-2 ring-emerald-500/30': quizSelected !== null && idx === Number(getCurrentQuestion().correct),
+                                        'border-red-400 bg-red-50 text-red-900': quizSelected === idx && idx !== Number(getCurrentQuestion().correct),
+                                        'border-slate-100 bg-slate-50 opacity-50 text-slate-400': quizSelected !== null && quizSelected !== idx && idx !== Number(getCurrentQuestion().correct)
+                                    }"
+                                    class="p-5 rounded-2xl border-2 text-left font-bold text-sm transition flex items-center justify-between gap-3">
+                                <div class="flex items-center gap-3.5">
+                                    <span class="w-8 h-8 rounded-xl font-black text-xs flex items-center justify-center shrink-0"
+                                          :class="{
+                                              'bg-white text-slate-700 border border-slate-200': quizSelected === null,
+                                              'bg-emerald-600 text-white': quizSelected !== null && idx === Number(getCurrentQuestion().correct),
+                                              'bg-red-600 text-white': quizSelected === idx && idx !== Number(getCurrentQuestion().correct),
+                                              'bg-slate-200 text-slate-500': quizSelected !== null && quizSelected !== idx && idx !== Number(getCurrentQuestion().correct)
+                                          }"
+                                          x-text="['A','B','C','D'][idx]"></span>
+                                    <span x-text="opt"></span>
+                                </div>
+                                <span x-show="quizSelected !== null && idx === Number(getCurrentQuestion().correct)" class="text-lg">✅</span>
+                                <span x-show="quizSelected === idx && idx !== Number(getCurrentQuestion().correct)" class="text-lg">❌</span>
+                            </button>
+                        </template>
+                    </div>
+
+                    <!-- Instant Scientific Fact Feedback Box -->
+                    <div x-show="quizSelected !== null" x-transition class="p-6 rounded-3xl border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
+                         :class="quizSelected === Number(getCurrentQuestion().correct) ? 'bg-emerald-50/90 border-emerald-200 text-emerald-950' : 'bg-amber-50/90 border-amber-200 text-amber-950'">
+                        <div class="space-y-1">
+                            <span class="text-[10px] font-black uppercase tracking-widest block"
+                                  :class="quizSelected === Number(getCurrentQuestion().correct) ? 'text-emerald-700' : 'text-amber-700'"
+                                  x-text="quizSelected === Number(getCurrentQuestion().correct) ? '✓ Correct! (+10 EC Earned)' : '💡 Scientific Fact & Explanation'"></span>
+                            <p class="text-xs md:text-sm font-semibold leading-relaxed" x-text="getCurrentQuestion().fact"></p>
+                        </div>
+                        <button @click="nextQuizQuestion()" class="px-7 py-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl text-xs font-black uppercase tracking-wider shrink-0 transition shadow-md">
+                            <span x-text="quizIndex + 1 < getActiveQuizSet().length ? 'Next Question &rarr;' : 'See Final Certificate &rarr;'"></span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Quiz Completed Certificate Screen -->
+                <div x-show="quizCompleted" x-transition class="bg-white p-10 md:p-14 rounded-[3.5rem] border border-slate-100 card-shadow text-center space-y-6">
+                    <div class="w-24 h-24 eco-gradient rounded-3xl flex items-center justify-center text-5xl mx-auto shadow-xl text-white">
+                        🏆
+                    </div>
+                    <div class="space-y-2">
+                        <span class="text-xs font-black uppercase tracking-widest bg-emerald-100 text-emerald-800 px-4 py-1.5 rounded-full">Official Eco-IQ Assessment Complete</span>
+                        <h3 class="text-3xl md:text-5xl font-black text-slate-900 tracking-tight mt-2" x-text="getQuizCertificateTitle()"></h3>
+                        <p class="text-sm text-slate-500 font-semibold" x-text="'You answered ' + quizScore + ' out of ' + getActiveQuizSet().length + ' questions correctly and earned +' + (quizScore * 10) + ' EC!'"></p>
+                    </div>
+                    <div class="flex flex-wrap justify-center gap-4 pt-4">
+                        <button @click="shuffleQuizSet()" class="eco-gradient text-white px-8 py-4 rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl hover:opacity-95 transition">
+                            🎲 Load 5 New Questions &rarr;
+                        </button>
+                        <button @click="challengeView = 'sorting'" class="bg-slate-900 text-emerald-400 px-8 py-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-slate-800 transition shadow-lg">
+                            ♻️ Play Waste Sorting Blitz &rarr;
+                        </button>
+                        <button @click="challengeView = 'catalog'" class="bg-slate-100 text-slate-700 px-7 py-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-slate-200 transition">
+                            &larr; Back to Catalog
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- 3. SEPARATE VIEW: WASTE SORTING BLITZ MINI-GAME -->
+            <div x-show="challengeView === 'sorting'" x-transition class="space-y-8">
+                
+                <!-- Top Navigation Bar inside Sorting Blitz -->
+                <div class="flex flex-wrap justify-between items-center gap-4 bg-white p-5 px-7 rounded-3xl border border-slate-100 card-shadow">
+                    <button @click="challengeView = 'catalog'" class="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-2xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2">
+                        <span>&larr; Back to Challenge Catalog</span>
+                    </button>
+                    <div class="flex items-center gap-3">
+                        <span class="text-xs font-black uppercase tracking-wider text-slate-400">Active Mode: <strong class="text-emerald-600">♻️ Waste Sorting Blitz</strong></span>
+                        <button @click="challengeView = 'quiz'" class="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-xl text-[11px] font-black uppercase tracking-wider transition">
+                            Switch to Eco-IQ Quiz 🧠
+                        </button>
+                    </div>
+                </div>
+
+                <div x-show="!sortCompleted && getActiveSortingSet().length > 0" class="bg-white p-8 md:p-12 rounded-[3rem] border border-slate-100 card-shadow space-y-8">
+                    <div class="flex flex-wrap justify-between items-center gap-4 border-b border-slate-100 pb-6">
+                        <div class="flex items-center gap-3">
+                            <span class="bg-emerald-100 text-emerald-800 text-xs font-black px-4 py-1.5 rounded-full uppercase tracking-wider"
+                                  x-text="'Item ' + (sortIndex + 1) + ' of ' + getActiveSortingSet().length"></span>
+                            <span class="text-xs font-bold text-slate-400">Select the correct recycling stream</span>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <span class="text-xs font-black text-emerald-600 uppercase" x-text="'Sorted Correctly: ' + sortScore + ' / ' + getActiveSortingSet().length"></span>
+                            <button @click="restartSortingGame()" class="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[11px] font-black uppercase tracking-wider transition">
+                                ↻ Shuffle Items
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Item to Sort Display Card -->
+                    <div class="p-8 md:p-10 bg-slate-900 rounded-[2.5rem] text-white text-center space-y-3 shadow-xl border border-slate-800 max-w-2xl mx-auto">
+                        <div class="text-6xl mb-2" x-text="getCurrentSortItem().emoji || '📦'"></div>
+                        <span class="text-[10px] font-black uppercase tracking-widest text-emerald-400">Where does this campus item belong?</span>
+                        <h3 class="text-2xl md:text-3xl font-black tracking-tight" x-text="getCurrentSortItem().name"></h3>
+                    </div>
+
+                    <!-- 4 Recycling Bins -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <template x-for="bin in sortingBins" :key="bin.id">
+                            <button @click="selectSortBin(bin.id)"
+                                    :disabled="sortFeedback !== null"
+                                    :class="{
+                                        'hover:border-emerald-500 hover:-translate-y-1 bg-slate-50 border-slate-200': sortFeedback === null,
+                                        'border-emerald-500 bg-emerald-50 ring-2 ring-emerald-500/30': sortFeedback !== null && bin.id === getCurrentSortItem().bin,
+                                        'border-red-400 bg-red-50': sortFeedback !== null && sortSelectedBin === bin.id && bin.id !== getCurrentSortItem().bin,
+                                        'opacity-50 bg-slate-50 border-slate-100': sortFeedback !== null && sortSelectedBin !== bin.id && bin.id !== getCurrentSortItem().bin
+                                    }"
+                                    class="p-6 rounded-3xl border-2 text-center transition-all flex flex-col items-center gap-2">
+                                <span class="text-4xl" x-text="bin.emoji"></span>
+                                <span class="font-black text-sm uppercase text-slate-900 tracking-wide mt-1" x-text="bin.name"></span>
+                                <span class="text-[10px] font-semibold text-slate-400" x-text="bin.sub"></span>
+                            </button>
+                        </template>
+                    </div>
+
+                    <!-- Instant Sorting Feedback -->
+                    <div x-show="sortFeedback !== null" x-transition class="p-6 rounded-3xl border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
+                         :class="sortFeedback && sortFeedback.correct ? 'bg-emerald-50 border-emerald-200 text-emerald-950' : 'bg-amber-50 border-amber-200 text-amber-950'">
+                        <div class="space-y-1">
+                            <span class="text-[10px] font-black uppercase tracking-widest block"
+                                  :class="sortFeedback && sortFeedback.correct ? 'text-emerald-700' : 'text-amber-700'"
+                                  x-text="sortFeedback ? sortFeedback.title : ''"></span>
+                            <p class="text-xs md:text-sm font-semibold leading-relaxed" x-text="getCurrentSortItem().tip"></p>
+                        </div>
+                        <button @click="nextSortItem()" class="px-7 py-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl text-xs font-black uppercase tracking-wider shrink-0 transition shadow-md">
+                            <span x-text="sortIndex + 1 < getActiveSortingSet().length ? 'Next Item &rarr;' : 'Finish Blitz &rarr;'"></span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Sorting Blitz Complete Screen -->
+                <div x-show="sortCompleted" x-transition class="bg-white p-10 md:p-14 rounded-[3.5rem] border border-slate-100 card-shadow text-center space-y-6">
+                    <div class="w-24 h-24 eco-gradient rounded-3xl flex items-center justify-center text-5xl mx-auto shadow-xl text-white">
+                        ♻️
+                    </div>
+                    <div class="space-y-2">
+                        <span class="text-xs font-black uppercase tracking-widest bg-emerald-100 text-emerald-800 px-4 py-1.5 rounded-full">Sorting Blitz Complete</span>
+                        <h3 class="text-3xl md:text-5xl font-black text-slate-900 tracking-tight mt-2" x-text="sortScore + ' / ' + getActiveSortingSet().length + ' Items Segregated'"></h3>
+                        <p class="text-sm text-slate-500 font-semibold" x-text="'You earned +' + (sortScore * 10) + ' EC for accurate campus waste sorting!'"></p>
+                    </div>
+                    <div class="flex flex-wrap justify-center gap-4 pt-4">
+                        <button @click="restartSortingGame()" class="eco-gradient text-white px-8 py-4 rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl hover:opacity-95 transition">
+                            ↻ Play New Sorting Round &rarr;
+                        </button>
+                        <button @click="challengeView = 'quiz'" class="bg-slate-900 text-emerald-400 px-8 py-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-slate-800 transition shadow-lg">
+                            🧠 Switch to Eco-IQ Quiz &rarr;
+                        </button>
+                        <button @click="challengeView = 'catalog'" class="bg-slate-100 text-slate-700 px-7 py-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-slate-200 transition">
+                            &larr; Back to Catalog
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- DEVELOPER EXCLUSIVE: CHALLENGE QUESTION & ITEM MANAGER -->
+            <div x-show="isDeveloper()" class="bg-white p-8 md:p-10 rounded-[3rem] border-2 border-slate-900 card-shadow space-y-8 mt-12">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-100 pb-6">
+                    <div>
+                        <span class="text-[10px] font-black uppercase tracking-widest bg-slate-900 text-emerald-400 px-3 py-1 rounded-full">Developer Control Panel</span>
+                        <h3 class="text-2xl font-black text-slate-900 uppercase tracking-tight mt-2">Challenge Question &amp; Item Bank Manager</h3>
+                        <p class="text-xs text-slate-500 font-medium">Add, edit, or delete Quiz questions and Waste Sorting items. All changes sync across devices via Firebase.</p>
+                    </div>
+                    <div class="flex flex-wrap gap-3">
+                        <button @click="openQuizModal()" class="eco-gradient text-white px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-wider shadow-md hover:opacity-95 transition">
+                            + Add Quiz Question
+                        </button>
+                        <button @click="openSortModal()" class="bg-slate-900 text-emerald-400 px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-wider shadow-md hover:bg-slate-800 transition">
+                            + Add Sorting Item
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Quiz Questions List for Developer -->
+                <div class="space-y-3">
+                    <h4 class="text-xs font-black uppercase tracking-wider text-slate-400" x-text="'Active Quiz Question Bank (' + getFilteredQuizBank().length + ' Questions)'"></h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-96 overflow-y-auto pr-1">
+                        <template x-for="q in getFilteredQuizBank()" :key="q.id">
+                            <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex justify-between items-start gap-3">
+                                <div class="space-y-1 pr-2">
+                                    <span class="text-[9px] font-black uppercase bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded" x-text="q.category || 'QUIZ'"></span>
+                                    <p class="text-xs font-black text-slate-900" x-text="q.question"></p>
+                                    <p class="text-[11px] text-emerald-700 font-bold" x-text="'Correct: ' + q.options[Number(q.correct)]"></p>
+                                </div>
+                                <div class="flex items-center gap-1.5 shrink-0">
+                                    <button @click="editQuizQuestion(q)" class="px-2.5 py-1.5 bg-white border border-slate-200 hover:bg-slate-100 rounded-lg text-[10px] font-black uppercase text-slate-700">✎</button>
+                                    <button @click="deleteQuizQuestion(q.id)" class="px-2.5 py-1.5 bg-red-50 hover:bg-red-100 rounded-lg text-[10px] font-black uppercase text-red-600">🗑</button>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- Sorting Items List for Developer -->
+                <div class="space-y-3 pt-4 border-t border-slate-100">
+                    <h4 class="text-xs font-black uppercase tracking-wider text-slate-400" x-text="'Active Waste Sorting Items (' + getFilteredSortBank().length + ' Items)'"></h4>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 max-h-80 overflow-y-auto pr-1">
+                        <template x-for="item in getFilteredSortBank()" :key="item.id">
+                            <div class="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 flex justify-between items-center gap-2">
+                                <div class="flex items-center gap-2.5 overflow-hidden">
+                                    <span class="text-2xl shrink-0" x-text="item.emoji"></span>
+                                    <div class="truncate">
+                                        <p class="text-xs font-black text-slate-900 truncate" x-text="item.name"></p>
+                                        <span class="text-[10px] font-bold uppercase text-emerald-700" x-text="'Bin: ' + item.bin"></span>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-1 shrink-0">
+                                    <button @click="editSortItem(item)" class="px-2 py-1 bg-white border border-slate-200 rounded-lg text-[10px] font-black">✎</button>
+                                    <button @click="deleteSortItem(item.id)" class="px-2 py-1 bg-red-50 text-red-600 rounded-lg text-[10px] font-black">🗑</button>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- VIEW: KNOWLEDGE BASE -->
+        <div x-show="activeTab === 'knowledge'" x-transition x-cloak class="max-w-7xl mx-auto px-6 py-8 space-y-12">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 border-b border-slate-100 pb-8">
+                <div>
+                    <h2 class="text-4xl font-black uppercase tracking-tight text-slate-900">Knowledge Hub</h2>
+                    <p class="text-slate-500 text-sm mt-1 font-medium">Research papers, practical guides & institutional eco-frameworks.</p>
+                </div>
+                <div class="flex items-center gap-4 w-full md:w-auto">
+                    <input type="text" x-model="searchQuery" placeholder="Search articles..." class="px-5 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-semibold focus:outline-none focus:border-emerald-500 w-full md:w-64 shadow-sm">
+                    <button x-show="isDeveloper()" @click="openArticleModal()" class="eco-gradient text-white px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-wider shadow-lg hover:opacity-95 transition whitespace-nowrap">
+                        + New Article
+                    </button>
+                </div>
+            </div>
+
+            <!-- Article Reader Modal / Full View -->
+            <div x-show="selectedArticle" x-transition class="bg-white rounded-[3rem] overflow-hidden border border-slate-100 card-shadow">
+                <div class="h-64 md:h-96 w-full relative bg-emerald-950">
+                    <template x-if="selectedArticle && selectedArticle.image">
+                        <img :src="selectedArticle.image" class="w-full h-full object-cover opacity-95" alt="Article Cover">
+                    </template>
+                    <template x-if="!selectedArticle || !selectedArticle.image">
+                        <div class="w-full h-full" x-html="getInlineBannerHtml('taiga', selectedArticle ? selectedArticle.title : 'ECOCAMPUS', 'INSTITUTIONAL RESEARCH')"></div>
+                    </template>
+                    <div class="absolute inset-0 bg-overlay"></div>
+                    <button @click="selectedArticle = null" class="absolute top-6 left-6 bg-white/95 backdrop-blur px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider text-slate-900 hover:bg-white shadow-lg transition">
+                        &larr; Back to Articles
+                    </button>
+                </div>
+                <div class="p-8 md:p-14 space-y-8">
+                    <div class="space-y-4 max-w-3xl">
+                        <span class="text-xs font-black bg-emerald-100 text-emerald-800 px-3.5 py-1.5 rounded-full uppercase tracking-wider" x-text="selectedArticle ? selectedArticle.category : ''"></span>
+                        <h1 class="text-3xl md:text-5xl font-black text-slate-900 tracking-tight" x-text="selectedArticle ? selectedArticle.title : ''"></h1>
+                        <div class="flex flex-wrap items-center gap-4 text-xs font-bold text-slate-400">
+                            <span>PRIMARY SOURCE: <strong class="text-emerald-700" x-text="selectedArticle ? (selectedArticle.source || selectedArticle.author) : ''"></strong></span>
+                            <span>•</span>
+                            <span x-text="selectedArticle ? selectedArticle.readTime : ''"></span>
+                        </div>
+                    </div>
+                    <div class="prose max-w-none text-slate-600 text-base md:text-lg leading-relaxed space-y-6 pt-6 border-t border-slate-100 font-medium" x-html="selectedArticle ? selectedArticle.content : ''"></div>
+                </div>
+            </div>
+
+            <!-- Empty State when no articles exist -->
+            <template x-if="!selectedArticle && filteredArticles().length === 0">
+                <div class="p-14 bg-white rounded-[3rem] text-center border border-slate-100 card-shadow space-y-4">
+                    <p class="text-slate-500 font-bold text-base">No articles published yet.</p>
+                    <button x-show="isDeveloper()" @click="openArticleModal()" class="eco-gradient text-white px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-wider shadow-lg hover:opacity-95 transition">
+                        + Publish First Article
+                    </button>
+                </div>
+            </template>
+
+            <!-- Article Grid -->
+            <div x-show="!selectedArticle" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <template x-for="art in filteredArticles()" :key="art.id">
+                    <div class="bg-white border border-slate-100 rounded-[2.5rem] card-shadow overflow-hidden flex flex-col justify-between hover:border-emerald-500 transition group">
+                        <div>
+                            <div class="h-52 w-full relative overflow-hidden bg-emerald-950 cursor-pointer" @click="selectedArticle = art">
+                                <template x-if="art.image && art.image.startsWith('http')">
+                                    <img :src="art.image" class="w-full h-full object-cover group-hover:scale-105 transition duration-500" :alt="art.title">
+                                </template>
+                                <template x-if="!art.image || !art.image.startsWith('http')">
+                                    <div class="w-full h-full group-hover:scale-105 transition duration-500" x-html="getInlineBannerHtml('taiga', (art.title || 'ECOCAMPUS').slice(0, 22).toUpperCase(), 'RESEARCH PROTOCOL')"></div>
+                                </template>
+                                <div class="absolute top-4 left-4 bg-white/95 backdrop-blur-md px-3.5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider text-emerald-800 shadow-sm" x-text="art.category"></div>
+                            </div>
+
+                            <div class="p-7 space-y-3">
+                                <div class="text-[11px] font-extrabold uppercase tracking-wider text-slate-400" x-text="art.readTime"></div>
+                                <h3 @click="selectedArticle = art" class="text-xl font-black text-slate-900 group-hover:text-emerald-600 transition tracking-tight cursor-pointer" x-text="art.title"></h3>
+                                <p class="text-xs text-slate-500 line-clamp-3 leading-relaxed font-medium" x-text="art.snippet"></p>
+                            </div>
+                        </div>
+
+                        <div class="px-7 pb-7 pt-4 border-t border-slate-100 space-y-4">
+                            <div class="flex justify-between items-center">
+                                <div class="pr-2 overflow-hidden">
+                                    <span class="text-[9px] font-extrabold uppercase tracking-wider text-slate-400 block">PRIMARY SOURCE:</span>
+                                    <span class="text-xs font-extrabold text-emerald-800 truncate block" x-text="art.source || art.author || 'EcoCampus Research'"></span>
+                                </div>
+                                <button @click="selectedArticle = art" class="text-xs font-black text-emerald-600 uppercase tracking-wider hover:text-emerald-700 whitespace-nowrap">
+                                    READ &rarr;
+                                </button>
+                            </div>
+
+                            <div x-show="isDeveloper()" class="grid grid-cols-2 gap-3 pt-1">
+                                <button type="button" @click.stop="editArticle(art)" class="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 rounded-xl text-[11px] font-black uppercase text-slate-700 transition flex items-center justify-center gap-1.5">
+                                    <span>✎</span> EDIT
+                                </button>
+                                <button type="button" @click.stop="deleteArticle(art.id)" class="py-2.5 px-4 bg-red-50 hover:bg-red-100 rounded-xl text-[11px] font-black uppercase text-red-600 transition flex items-center justify-center gap-1.5">
+                                    <span>🗑</span> DELETE
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- VIEW: HABIT TRACKER -->
+        <div x-show="activeTab === 'tracker'" x-transition x-cloak class="max-w-7xl mx-auto px-6 space-y-12 py-6">
+            <div class="grid lg:grid-cols-12 gap-10 items-start">
+                <div class="lg:col-span-6 bg-white p-8 md:p-10 rounded-[3rem] border border-slate-100 card-shadow space-y-6">
+                    <div class="flex flex-wrap justify-between items-center gap-2 border-b border-slate-100 pb-4">
+                        <div>
+                            <h2 class="text-2xl font-black uppercase tracking-tight">Daily Eco-Habits</h2>
+                            <p class="text-xs text-slate-400 font-semibold mt-0.5">Check completed habits to earn Eco Coins (EC)</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-black bg-emerald-100 text-emerald-800 px-3.5 py-1.5 rounded-full" x-text="habits.filter(h => h.checked).length + ' / ' + habits.length + ' Done'"></span>
+                            <button @click="resetHabitsAndCoins()" class="text-[10px] font-extrabold uppercase text-red-600 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-full transition" title="Reset coins and checkboxes to 0">Reset (0 EC)</button>
+                        </div>
+                    </div>
+                    <div class="space-y-3">
+                        <template x-for="habit in habits" :key="habit.id">
+                            <label class="flex items-center justify-between p-4 bg-slate-50 rounded-2xl cursor-pointer border-2 transition" :class="habit.checked ? 'border-emerald-500 bg-emerald-50/40' : 'border-transparent hover:border-emerald-200'">
+                                <div class="flex items-center gap-3.5 pr-2">
+                                    <input type="checkbox" x-model="habit.checked" @change="updateStats()" class="w-5 h-5 rounded text-eco-600 border-slate-300 focus:ring-eco-500">
+                                    <div>
+                                        <span class="font-bold text-slate-800 text-sm block" x-text="habit.name"></span>
+                                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400" x-text="habit.category"></span>
+                                    </div>
+                                </div>
+                                <span class="text-[10px] font-black text-eco-700 bg-eco-100 px-3 py-1 rounded-full uppercase shrink-0" x-text="'+' + habit.val + ' EC'"></span>
+                            </label>
+                        </template>
+                    </div>
+                </div>
+
+                <div class="lg:col-span-6 space-y-8">
+                    <div class="bg-slate-900 p-10 rounded-[3rem] text-white shadow-2xl relative overflow-hidden">
+                        <div class="flex justify-between items-center mb-6">
+                            <h4 class="text-xs font-bold uppercase tracking-widest text-emerald-400">Live Impact Quantifier</h4>
+                            <span class="text-xs font-black bg-slate-800 text-emerald-300 px-3 py-1 rounded-full" x-text="getLevelInfo().title + ' ' + getLevelInfo().emoji"></span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-8">
+                            <div>
+                                <p class="text-4xl md:text-5xl font-black text-emerald-400" x-text="waterSaved"></p>
+                                <p class="text-xs text-slate-400 font-bold uppercase mt-2">Liters Water Preserved</p>
+                            </div>
+                            <div>
+                                <p class="text-4xl md:text-5xl font-black text-emerald-400" x-text="paperSaved.toFixed(2)"></p>
+                                <p class="text-xs text-slate-400 font-bold uppercase mt-2">KG Waste & Paper Conserved</p>
+                            </div>
+                        </div>
+                        <div class="mt-8 pt-6 border-t border-slate-800 font-bold text-emerald-200 text-sm text-center" x-text="impactEquiv"></div>
+                    </div>
+
+                    <!-- Eco-Shop -->
+                    <div class="bg-white p-10 rounded-[3rem] border border-slate-100 card-shadow">
+                        <div class="flex justify-between items-center mb-6">
+                            <h3 class="text-xl font-black uppercase text-slate-900 tracking-tight">Campus Rewards Marketplace</h3>
+                            <span class="text-xs font-black text-emerald-700 bg-emerald-50 px-3.5 py-1.5 rounded-full border border-emerald-200" x-text="'Balance: ' + user.coins + ' EC 🪙'"></span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <template x-for="item in marketplace" :key="item.name">
+                                <button @click="buyReward(item)" class="p-5 bg-slate-50 rounded-2xl text-center border-2 border-slate-100 hover:border-eco-500 hover:bg-white transition flex flex-col items-center">
+                                    <div class="text-4xl mb-2" x-text="item.icon"></div>
+                                    <p class="text-xs font-bold text-slate-700" x-text="item.name"></p>
+                                    <p class="text-xs font-black text-eco-600 mt-1" x-text="item.cost + ' EC'"></p>
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW: MOVEMENT (ALL 8 CARDS WITH DIRECT INLINE VECTOR ARTWORK) -->
+        <div x-show="activeTab === 'orgs'" x-transition x-cloak class="max-w-7xl mx-auto px-6 py-8 space-y-10">
+            <!-- Header & Summary Bar -->
+            <div class="bg-slate-900 text-white p-8 md:p-10 rounded-[3rem] shadow-xl flex flex-col lg:flex-row justify-between items-center gap-6 border border-slate-800">
+                <div class="space-y-2 text-center lg:text-left">
+                    <span class="text-[10px] font-black uppercase tracking-widest bg-emerald-500/20 text-emerald-400 px-3.5 py-1 rounded-full border border-emerald-500/30">Official Conservation Directory</span>
+                    <h2 class="text-3xl md:text-4xl font-black uppercase tracking-tight mt-2">National & Global Movement Partners</h2>
+                    <p class="text-slate-400 max-w-2xl text-xs md:text-sm font-medium">Connecting school sustainability initiatives with leading Russian national conservation authorities and international environmental frameworks.</p>
+                </div>
+                <div class="grid grid-cols-2 gap-4 shrink-0 w-full lg:w-auto">
+                    <div class="bg-slate-800/80 border border-slate-700 px-6 py-4 rounded-2xl text-center">
+                        <span class="text-2xl font-black text-emerald-400 block">2</span>
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-300">Russian Authorities</span>
+                    </div>
+                    <div class="bg-slate-800/80 border border-slate-700 px-6 py-4 rounded-2xl text-center">
+                        <span class="text-2xl font-black text-emerald-400 block">6</span>
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-300">Global Partners</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 8 Rich Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-7">
+                <template x-for="org in globalOrgs" :key="org.name">
+                    <div class="bg-white border border-slate-200/80 rounded-[2.5rem] card-shadow overflow-hidden group hover:border-emerald-500 hover:-translate-y-1 transition-all duration-300 flex flex-col h-full">
+                        
+                        <!-- Top Illustrated Landscape Banner -->
+                        <div class="h-44 w-full relative overflow-hidden bg-emerald-950 shrink-0">
+                            <div class="w-full h-full group-hover:scale-105 transition duration-700"
+                                 x-html="org.bannerHtml">
+                            </div>
+                            <!-- Top Badges -->
+                            <div class="absolute top-3.5 left-3.5 right-3.5 flex justify-between items-center gap-2 z-10">
+                                <span class="bg-white/95 backdrop-blur-md px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider shadow-sm"
+                                      :class="org.isRussian ? 'text-emerald-900 border border-emerald-200' : 'text-slate-800'"
+                                      x-text="org.badge"></span>
+                                <span class="bg-slate-900/80 backdrop-blur-md text-emerald-300 px-2.5 py-1 rounded-full text-[9px] font-extrabold uppercase tracking-wider"
+                                      x-text="org.founded"></span>
+                            </div>
+                        </div>
+
+                        <!-- Card Body -->
+                        <div class="p-6 pt-0 flex-grow flex flex-col justify-between relative z-10">
+                            <div>
+                                <!-- Overlapping Emblem Badge -->
+                                <div class="flex justify-between items-end -mt-8 mb-4">
+                                    <div class="w-16 h-16 bg-white rounded-2xl flex items-center justify-center shadow-lg border-4 border-white text-emerald-700"
+                                         x-html="org.svgIcon">
+                                    </div>
+                                    <span class="text-[10px] font-black uppercase tracking-widest text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-xl"
+                                          x-text="org.region"></span>
+                                </div>
+
+                                <!-- Organization Title & Description -->
+                                <h4 class="font-black text-base uppercase text-slate-900 tracking-tight leading-snug group-hover:text-emerald-700 transition" x-text="org.name"></h4>
+                                <p class="text-xs text-slate-500 leading-relaxed mt-2.5 font-medium" x-text="org.desc"></p>
+
+                                <!-- Focus Pillar Tags -->
+                                <div class="flex flex-wrap gap-1.5 mt-4">
+                                    <template x-for="tag in org.tags" :key="tag">
+                                        <span class="text-[10px] font-bold bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg" x-text="tag"></span>
+                                    </template>
+                                </div>
+                            </div>
+
+                            <!-- Bottom Impact Metric & Action Button -->
+                            <div class="mt-6 pt-4 border-t border-slate-100 space-y-3">
+                                <div class="bg-slate-50 px-3.5 py-2.5 rounded-xl flex items-center justify-between">
+                                    <span class="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Key Scope</span>
+                                    <span class="text-[11px] font-black text-slate-800" x-text="org.metric"></span>
+                                </div>
+                                <a :href="org.url" target="_blank" rel="noopener noreferrer" 
+                                   class="w-full py-3 px-4 bg-emerald-50 hover:bg-emerald-600 text-emerald-800 hover:text-white rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center justify-center gap-2">
+                                    <span>Official Portal</span>
+                                    <span>&rarr;</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- VIEW: EVENTS HUB -->
+        <div x-show="activeTab === 'events'" x-transition x-cloak class="max-w-7xl mx-auto px-6 py-8 space-y-12">
+            <div class="grid lg:grid-cols-12 gap-10 items-start">
+                
+                <div class="lg:col-span-8 space-y-8">
+                    <div class="bg-white p-8 md:p-10 rounded-[3rem] card-shadow border border-slate-100">
+                        <div class="flex flex-wrap justify-between items-center gap-4 mb-8 pb-6 border-b border-slate-100">
+                            <div>
+                                <span class="text-xs font-black uppercase tracking-widest text-emerald-600 block">Affiliation: <span x-text="currentUser && currentUser.school ? currentUser.school : 'Independent / Open Community'"></span></span>
+                                <h2 class="text-3xl font-black text-slate-900 tracking-tight mt-1" x-text="monthNames[calMonth] + ' ' + calYear"></h2>
+                            </div>
+                            <div class="flex items-center gap-2 bg-slate-100 p-1.5 rounded-2xl">
+                                <button @click="prevMonth()" class="p-2.5 hover:bg-white rounded-xl transition text-slate-700 shadow-sm"><i data-lucide="chevron-left" class="w-5 h-5"></i></button>
+                                <button @click="goToToday()" class="px-4 py-2 text-xs font-extrabold uppercase tracking-wider text-slate-700 hover:bg-white rounded-xl transition">Today</button>
+                                <button @click="nextMonth()" class="p-2.5 hover:bg-white rounded-xl transition text-slate-700 shadow-sm"><i data-lucide="chevron-right" class="w-5 h-5"></i></button>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-7 gap-2 text-center mb-3">
+                            <template x-for="d in ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']">
+                                <div class="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 py-1" x-text="d"></div>
+                            </template>
+                        </div>
+
+                        <div class="calendar-grid">
+                            <template x-for="blank in getBlankDays()" :key="'blank-'+blank">
+                                <div class="calendar-cell empty"></div>
+                            </template>
+                            <template x-for="dayNum in getDaysInMonth()" :key="calYear + '-' + calMonth + '-' + dayNum">
+                                <div @click="selectedDay = dayNum" class="calendar-cell" :class="{'selected': selectedDay === dayNum, 'border-emerald-300 bg-emerald-50/40': getEventsForDay(dayNum).length > 0 && selectedDay !== dayNum}">
+                                    <div class="flex justify-between items-start">
+                                        <span class="text-xs font-extrabold w-6 h-6 flex items-center justify-center rounded-full" :class="selectedDay === dayNum ? 'bg-emerald-600 text-white' : 'text-slate-700'" x-text="dayNum"></span>
+                                        <span x-show="getEventsForDay(dayNum).length > 0" class="text-[10px] font-black bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-md" x-text="getEventsForDay(dayNum).length"></span>
+                                    </div>
+                                    <div class="space-y-1 mt-1 overflow-hidden">
+                                        <template x-for="ev in getEventsForDay(dayNum).slice(0, 2)" :key="ev.id">
+                                            <div class="text-[10px] font-bold bg-emerald-600 text-white px-2 py-0.5 rounded truncate" x-text="ev.title"></div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+
+                        <div class="mt-10 pt-8 border-t border-slate-100 space-y-4">
+                            <div class="flex justify-between items-center">
+                                <h4 class="text-sm font-black uppercase tracking-wider text-slate-500">
+                                    Scheduled Initiatives in <span class="text-emerald-600" x-text="monthNames[calMonth] + (selectedDay ? ' (Day ' + selectedDay + ')' : '')"></span>
+                                </h4>
+                                <button x-show="selectedDay !== null" @click="selectedDay = null" class="text-xs font-bold text-emerald-600 hover:underline">Show Entire Month</button>
+                            </div>
+
+                            <template x-if="getFilteredEvents().length === 0">
+                                <div class="p-8 bg-slate-50 rounded-3xl text-center space-y-2 border border-dashed border-slate-200">
+                                    <p class="text-slate-600 text-sm font-bold">No events scheduled for this period. Calendar is clean!</p>
+                                </div>
+                            </template>
+
+                            <div class="space-y-3">
+                                <template x-for="ev in getFilteredEvents()" :key="ev.id">
+                                    <div class="p-5 bg-slate-50 border border-slate-100 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                                        <div class="space-y-1">
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                <span class="text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full" x-text="ev.date"></span>
+                                                <span class="text-xs font-bold text-slate-400" x-text="'📍 ' + ev.location"></span>
+                                                <span x-show="ev.organizer" class="text-[10px] font-bold text-emerald-700 bg-white border border-slate-200 px-2 py-0.5 rounded-md" x-text="'Host: ' + ev.organizer"></span>
+                                            </div>
+                                            <h5 class="font-black text-slate-900 text-base" x-text="ev.title"></h5>
+                                            <p class="text-xs text-slate-500 font-medium" x-text="ev.desc"></p>
+                                        </div>
+                                        <div class="flex items-center gap-3 w-full sm:w-auto justify-end shrink-0">
+                                            <button @click="rsvpEvent(ev)" 
+                                                :class="hasAttended(ev.id) ? 'bg-slate-200 text-slate-700' : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow'"
+                                                class="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition"
+                                                x-text="hasAttended(ev.id) ? '✓ Going' : 'RSVP (+25 EC)'">
+                                            </button>
+                                            <button x-show="isDeveloper() || (currentUser && ev.organizer === currentUser.name)" @click="deleteEvent(ev.id)" class="px-3 py-2 bg-red-50 text-red-600 rounded-xl text-xs font-bold uppercase hover:bg-red-100">Delete</button>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Create Event Sidebar -->
+                <div class="lg:col-span-4 space-y-6">
+                    <!-- Role Event Counter Card -->
+                    <div class="bg-slate-900 text-white p-7 rounded-[2.5rem] shadow-xl space-y-2">
+                        <span class="text-[10px] font-black uppercase tracking-widest text-emerald-400" x-text="isOrg() ? 'Organization / Director Stats' : 'Volunteer Activity Stats'"></span>
+                        <div x-show="!isOrg()" class="flex justify-between items-end">
+                            <div>
+                                <p class="text-3xl font-black" x-text="user.attendedEvents.length"></p>
+                                <p class="text-xs text-slate-400 font-bold uppercase">Events Attended</p>
+                            </div>
+                        </div>
+                        <div x-show="isOrg()" class="flex justify-between items-end">
+                            <div>
+                                <p class="text-3xl font-black" x-text="getHostedEventsCount()"></p>
+                                <p class="text-xs text-slate-400 font-bold uppercase">Events Hosted by You</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-8 rounded-[3rem] card-shadow border border-slate-100 space-y-6">
+                        <h3 class="text-xl font-black uppercase text-slate-900 tracking-tight">Propose Initiative</h3>
+                        <form @submit.prevent="createEvent()" class="space-y-4">
+                            <div>
+                                <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Event Title</label>
+                                <input type="text" x-model="newEvent.title" placeholder="e.g. Campus Clean-Up" class="w-full mt-1 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold focus:outline-none focus:border-emerald-500" required>
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Day (1-31)</label>
+                                    <input type="number" min="1" max="31" x-model="newEvent.day" class="w-full mt-1 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold focus:outline-none focus:border-emerald-500" required>
+                                </div>
+                                <div>
+                                    <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Month</label>
+                                    <select x-model="newEvent.month" class="w-full mt-1 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-700 focus:outline-none focus:border-emerald-500">
+                                        <template x-for="(m, idx) in monthNames" :key="m">
+                                            <option :value="idx" x-text="m"></option>
+                                        </template>
+                                    </select>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Location</label>
+                                <input type="text" x-model="newEvent.location" placeholder="e.g. Main Quad" class="w-full mt-1 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold focus:outline-none focus:border-emerald-500" required>
+                            </div>
+                            <div>
+                                <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Description</label>
+                                <textarea x-model="newEvent.desc" rows="3" placeholder="Brief details..." class="w-full mt-1 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold focus:outline-none focus:border-emerald-500" required></textarea>
+                            </div>
+                            <button type="submit" class="w-full eco-gradient text-white font-black py-4 rounded-2xl shadow-xl uppercase tracking-widest text-xs hover:opacity-95 transition">Publish Event</button>
+                        </form>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- VIEW: PROFILE -->
+        <div x-show="activeTab === 'profile'" x-transition x-cloak class="max-w-4xl mx-auto px-6 py-8 space-y-8">
+            <div class="bg-white p-10 rounded-[3.5rem] border border-slate-100 card-shadow flex flex-col md:flex-row items-center gap-8">
+                <div class="w-32 h-32 eco-gradient rounded-full flex items-center justify-center text-white text-5xl font-black shadow-xl shrink-0" x-text="currentUser ? currentUser.name.charAt(0).toUpperCase() : 'U'"></div>
+                <div class="space-y-3 text-center md:text-left flex-grow">
+                    <div class="flex flex-wrap items-center justify-center md:justify-start gap-3">
+                        <h2 class="text-3xl font-black text-slate-900 tracking-tight" x-text="currentUser ? currentUser.name : ''"></h2>
+                        <span class="text-xs font-black bg-emerald-100 text-emerald-800 px-3.5 py-1 rounded-full uppercase" x-text="isOrg() ? (currentUser.orgTitle || 'Verified Organization / Director') : 'Student / Volunteer Steward'"></span>
+                        <span x-show="isDeveloper()" class="text-xs font-black bg-slate-900 text-emerald-400 px-3 py-1 rounded-full uppercase">Developer</span>
+                    </div>
+                    <p class="text-sm font-semibold text-slate-400" x-text="currentUser ? currentUser.email : ''"></p>
+                    <p class="text-xs font-bold text-eco-600 uppercase tracking-widest">Institution: <span x-text="currentUser && currentUser.school ? currentUser.school : 'Independent / Open Community'"></span></p>
+                </div>
+                <button @click="signOut()" class="px-6 py-3 bg-red-50 text-red-600 border border-red-200 rounded-2xl text-xs font-black uppercase tracking-wider hover:bg-red-100 transition shrink-0">Sign Out</button>
+            </div>
+
+            <!-- ROLE SWITCHER CARD -->
+            <div class="bg-white p-8 md:p-10 rounded-[3rem] border border-slate-100 card-shadow space-y-6">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                    <div class="space-y-2">
+                        <div class="inline-flex items-center gap-2 bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">
+                            Account Role & Institutional Verification
+                        </div>
+                        <h3 class="text-2xl font-black text-slate-900 tracking-tight" x-text="isOrg() ? 'Verified Organization / School Director Mode' : 'Switch to Organization / Director Account'"></h3>
+                        <p class="text-xs text-slate-500 font-medium max-w-xl" x-text="isOrg() ? 'Your account is verified as an institutional organizer. We track the total number of eco-initiatives and events you host.' : 'Are you a School Director, Faculty Coordinator, or Eco-Club Leader? Verify your institutional status to switch to an Organization account and track hosted initiatives.'"></p>
+                    </div>
+                    <div class="shrink-0">
+                        <button x-show="!isOrg()" @click="openOrgVerificationModal()" class="eco-gradient text-white px-7 py-4 rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl hover:opacity-95 transition">
+                            Verify & Switch to Organization &rarr;
+                        </button>
+                        <button x-show="isOrg()" @click="switchToIndividual()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-7 py-4 rounded-2xl text-xs font-black uppercase tracking-widest transition">
+                            Switch to Volunteer Account
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Detailed Progression & Tenure Stats in Profile -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div class="bg-slate-900 text-white p-7 rounded-[2.5rem] shadow-lg space-y-2">
+                    <span class="text-[10px] font-black uppercase tracking-widest text-emerald-400">Current Rank</span>
+                    <div class="flex items-center gap-3 pt-1">
+                        <span class="text-4xl" x-text="getLevelInfo().emoji"></span>
+                        <div>
+                            <p class="text-lg font-black leading-tight" x-text="getLevelInfo().title"></p>
+                            <p class="text-[10px] text-emerald-400 font-bold mt-1" x-text="getLevelInfo().tenureLabel"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white p-7 rounded-[2.5rem] border border-slate-100 card-shadow space-y-2">
+                    <span class="text-[10px] font-black uppercase tracking-widest text-slate-400">Days on Platform</span>
+                    <p class="text-3xl font-black text-slate-900" x-text="getLevelInfo().days"></p>
+                    <p class="text-xs text-emerald-600 font-bold" x-text="'Joined: ' + formatJoinDate()"></p>
+                </div>
+
+                <div class="bg-white p-7 rounded-[2.5rem] border border-slate-100 card-shadow space-y-2">
+                    <span class="text-[10px] font-black uppercase tracking-widest text-slate-400">Events Attended</span>
+                    <p class="text-3xl font-black text-slate-900" x-text="user.attendedEvents.length"></p>
+                    <p class="text-xs text-emerald-600 font-bold">Volunteer Participation</p>
+                </div>
+
+                <div class="bg-white p-7 rounded-[2.5rem] border border-slate-100 card-shadow space-y-2">
+                    <span class="text-[10px] font-black uppercase tracking-widest text-slate-400">Events Hosted</span>
+                    <p class="text-3xl font-black text-slate-900" x-text="getHostedEventsCount()"></p>
+                    <p class="text-xs text-emerald-600 font-bold" x-text="isOrg() ? 'Director / Org Metric' : 'Created Initiatives'"></p>
+                </div>
+            </div>
+
+            <!-- Automatic Rank Roadmap -->
+            <div class="bg-white p-8 md:p-10 rounded-[3rem] border border-slate-100 card-shadow space-y-6">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-100 pb-4">
+                    <div>
+                        <h4 class="text-base font-black uppercase tracking-wider text-slate-900">Tenure Rank Roadmap</h4>
+                        <p class="text-xs text-slate-500 font-medium mt-0.5">Your rank upgrades automatically based on how many calendar days you have been registered on the platform.</p>
+                    </div>
+                    <span class="text-[11px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 px-3.5 py-1.5 rounded-full shrink-0" x-text="'Member since: ' + formatJoinDate()"></span>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-5 gap-3">
+                    <template x-for="milestone in getRankRoadmap()" :key="milestone.level">
+                        <div class="p-4 rounded-2xl border-2 flex flex-col justify-between transition"
+                             :class="getLevelInfo().days >= milestone.reqDays ? 'border-emerald-500 bg-emerald-50/40' : 'border-slate-100 bg-slate-50 opacity-60'">
+                            <div class="flex justify-between items-start">
+                                <span class="text-2xl" x-text="milestone.emoji"></span>
+                                <span class="text-[9px] font-black uppercase px-2 py-0.5 rounded-full"
+                                      :class="getLevelInfo().days >= milestone.reqDays ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-600'"
+                                      x-text="getLevelInfo().days >= milestone.reqDays ? 'Unlocked' : milestone.period"></span>
+                            </div>
+                            <div class="mt-3">
+                                <p class="text-[10px] font-extrabold uppercase tracking-wider text-emerald-700" x-text="'Level ' + milestone.level"></p>
+                                <p class="text-xs font-black text-slate-900 mt-0.5 leading-snug" x-text="milestone.title"></p>
+                                <p class="text-[10px] font-bold text-slate-400 mt-1" x-text="milestone.reqDays + (milestone.reqDays === 1 ? ' Day' : ' Days')"></p>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW: DEVELOPER INBOX -->
+        <div x-show="activeTab === 'inbox' && isDeveloper()" x-transition x-cloak class="max-w-5xl mx-auto px-6 py-8 space-y-8">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-6">
+                <div>
+                    <h2 class="text-3xl font-black uppercase tracking-tight text-slate-900">Developer Inbox</h2>
+                    <p class="text-xs text-slate-400 font-bold uppercase mt-1">Incoming community reports, feedback & event submissions</p>
+                </div>
+                <span class="bg-emerald-100 text-emerald-800 text-xs font-black px-4 py-1.5 rounded-full" x-text="feedbacks.length + ' items'"></span>
+            </div>
+            
+            <div class="space-y-4">
+                <template x-if="feedbacks.length === 0">
+                    <div class="p-12 bg-white rounded-3xl text-center border border-slate-100 shadow-sm">
+                        <p class="text-slate-400 text-sm font-bold">Inbox is completely clear!</p>
+                    </div>
+                </template>
+                <template x-for="(fb, idx) in feedbacks" :key="idx">
+                    <div class="bg-white p-6 rounded-3xl border border-slate-100 card-shadow flex justify-between items-start gap-4">
+                        <div class="space-y-2">
+                            <span class="text-[10px] font-black uppercase bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-md" x-text="fb.type || 'Feedback'"></span>
+                            <p class="text-sm font-bold text-slate-800" x-text="fb.message"></p>
+                            <p class="text-xs text-slate-400">From: <span class="font-bold text-slate-600" x-text="fb.author"></span></p>
+                        </div>
+                        <button @click="feedbacks.splice(idx, 1); syncToCloud()" class="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-200">Resolve</button>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- 4. GLOBAL INSTITUTIONAL FOOTER (SCHOOL MENTION & LINKS ONLY AT THE BOTTOM) -->
+    <footer x-show="currentUser" x-cloak class="bg-white border-t border-slate-200/80 py-8 px-6 mt-auto">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
+            <div class="flex items-center gap-3">
+                <div class="p-2 bg-emerald-600 rounded-xl text-white"><i data-lucide="leaf" class="w-4 h-4"></i></div>
+                <div>
+                    <span class="font-black text-sm uppercase tracking-wider text-slate-900 block">EcoCampus Guide • School No. 1317</span>
+                    <span class="text-xs text-slate-400 font-medium">Institutional Sustainability & Zero-Waste Platform</span>
+                </div>
+            </div>
+            <div class="flex flex-wrap items-center justify-center gap-3">
+                <a href="https://sch1317.mskobr.ru/" target="_blank" rel="noopener noreferrer"
+                   class="px-5 py-2.5 bg-emerald-50 hover:bg-emerald-600 text-emerald-800 hover:text-white border border-emerald-200 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2">
+                    <span>🏫 School No. 1317 Website (sch1317.mskobr.ru)</span>
+                    <span>&rarr;</span>
+                </a>
+                <a href="https://max.ru/id7729759977_gos" target="_blank" rel="noopener noreferrer"
+                   class="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-emerald-400 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2">
+                    <span>💬 Official MAX Public (max.ru)</span>
+                    <span>&rarr;</span>
+                </a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- DEVELOPER MODAL: ADD/EDIT QUIZ QUESTION -->
+    <div x-show="showQuizModal" x-transition x-cloak class="fixed inset-0 z-[270] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+        <div class="bg-white w-full max-w-xl rounded-[3rem] p-8 md:p-10 shadow-2xl space-y-5 my-8">
+            <h3 class="text-2xl font-black text-slate-900 tracking-tight" x-text="quizForm.id ? 'Edit Quiz Question' : 'Add New Quiz Question'"></h3>
+            <form @submit.prevent="saveQuizQuestion()" class="space-y-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Category</label>
+                        <input type="text" x-model="quizForm.category" placeholder="e.g. RECYCLING SCIENCE" class="w-full mt-1 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold" required>
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Correct Option</label>
+                        <select x-model="quizForm.correct" class="w-full mt-1 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold">
+                            <option :value="0">Option A (First)</option>
+                            <option :value="1">Option B (Second)</option>
+                            <option :value="2">Option C (Third)</option>
+                            <option :value="3">Option D (Fourth)</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Question Text</label>
+                    <input type="text" x-model="quizForm.question" placeholder="Enter question..." class="w-full mt-1 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold" required>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Option A</label>
+                        <input type="text" x-model="quizForm.opt0" class="w-full mt-1 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold" required>
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Option B</label>
+                        <input type="text" x-model="quizForm.opt1" class="w-full mt-1 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold" required>
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Option C</label>
+                        <input type="text" x-model="quizForm.opt2" class="w-full mt-1 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold" required>
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Option D</label>
+                        <input type="text" x-model="quizForm.opt3" class="w-full mt-1 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold" required>
+                    </div>
+                </div>
+                <div>
+                    <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Scientific Fact / Explanation</label>
+                    <textarea x-model="quizForm.fact" rows="2" placeholder="Shown immediately after the user answers..." class="w-full mt-1 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-semibold" required></textarea>
+                </div>
+                <div class="flex gap-3 pt-2">
+                    <button type="button" @click="showQuizModal = false" class="flex-1 py-3.5 bg-slate-100 text-slate-600 rounded-2xl text-xs font-black uppercase">Cancel</button>
+                    <button type="submit" class="flex-1 py-3.5 eco-gradient text-white rounded-2xl text-xs font-black uppercase shadow-lg">Save Question</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- DEVELOPER MODAL: ADD/EDIT SORTING ITEM -->
+    <div x-show="showSortModal" x-transition x-cloak class="fixed inset-0 z-[270] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+        <div class="bg-white w-full max-w-md rounded-[3rem] p-8 md:p-10 shadow-2xl space-y-5 my-8">
+            <h3 class="text-2xl font-black text-slate-900 tracking-tight" x-text="sortForm.id ? 'Edit Sorting Item' : 'Add Waste Sorting Item'"></h3>
+            <form @submit.prevent="saveSortItem()" class="space-y-4">
+                <div class="grid grid-cols-3 gap-3">
+                    <div>
+                        <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Emoji</label>
+                        <input type="text" x-model="sortForm.emoji" placeholder="🥤" class="w-full mt-1 p-3 bg-slate-50 border border-slate-200 rounded-xl text-center text-xl" required>
+                    </div>
+                    <div class="col-span-2">
+                        <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Target Recycling Bin</label>
+                        <select x-model="sortForm.bin" class="w-full mt-1 p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold">
+                            <option value="paper">Paper & Cardboard</option>
+                            <option value="plastic">Plastic & Metal</option>
+                            <option value="ewaste">E-Waste & Batteries</option>
+                            <option value="organic">Organic / General</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Item Name</label>
+                    <input type="text" x-model="sortForm.name" placeholder="e.g. Paper Coffee Cup (Plastic-Lined)" class="w-full mt-1 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold" required>
+                </div>
+                <div>
+                    <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Educational Tip / Explanation</label>
+                    <textarea x-model="sortForm.tip" rows="2" placeholder="Why does it go into this bin?" class="w-full mt-1 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-semibold" required></textarea>
+                </div>
+                <div class="flex gap-3 pt-2">
+                    <button type="button" @click="showSortModal = false" class="flex-1 py-3.5 bg-slate-100 text-slate-600 rounded-2xl text-xs font-black uppercase">Cancel</button>
+                    <button type="submit" class="flex-1 py-3.5 eco-gradient text-white rounded-2xl text-xs font-black uppercase shadow-lg">Save Item</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ORGANIZATION / DIRECTOR ROLE VERIFICATION MODAL -->
+    <div x-show="showOrgVerifyModal" x-transition x-cloak class="fixed inset-0 z-[260] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+        <div class="bg-white w-full max-w-md rounded-[3rem] p-8 md:p-10 shadow-2xl space-y-6 my-8 text-center">
+            <div class="w-16 h-16 bg-emerald-100 rounded-2xl flex items-center justify-center mx-auto text-emerald-600">
+                <i data-lucide="award" class="w-8 h-8"></i>
+            </div>
+            <div>
+                <h3 class="text-2xl font-black text-slate-900 tracking-tight uppercase">Organization / Director Verification</h3>
+                <p class="text-xs text-slate-500 font-medium mt-1">Verify your authority (e.g. School Director, Eco-Club Head, or Institution Admin) to unlock organizer tracking.</p>
+            </div>
+
+            <div class="space-y-4 text-left">
+                <div>
+                    <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Official Position / Title</label>
+                    <input type="text" x-model="orgVerifyForm.position" placeholder="e.g. School Director / Eco-Club President" class="w-full mt-1 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold focus:outline-none focus:border-emerald-500">
+                </div>
+                <div>
+                    <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">School / Organization Name</label>
+                    <input type="text" x-model="orgVerifyForm.school" placeholder="e.g. Green Valley High School" class="w-full mt-1 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold focus:outline-none focus:border-emerald-500">
+                </div>
+            </div>
+
+            <div class="bg-emerald-50 p-4 rounded-2xl border border-emerald-200">
+                <p class="text-[11px] font-bold text-emerald-800">🔐 Institutional Verification Code:</p>
+                <p class="text-2xl font-black text-emerald-700 tracking-widest mt-1" x-text="orgVerifyCode"></p>
+            </div>
+
+            <div>
+                <input type="text" x-model="orgVerifyInput" placeholder="Enter 6-digit code" class="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-center text-xl font-black tracking-widest focus:outline-none focus:border-emerald-500" maxlength="6">
+            </div>
+
+            <div class="flex gap-3 pt-2">
+                <button type="button" @click="showOrgVerifyModal = false" class="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl text-xs font-black uppercase tracking-wider hover:bg-slate-200 transition">Cancel</button>
+                <button type="button" @click="confirmOrgSwitch()" class="flex-1 py-4 eco-gradient text-white rounded-2xl text-xs font-black uppercase tracking-wider shadow-lg hover:opacity-95 transition">Verify & Switch</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ARTICLE EDITOR MODAL -->
+    <div x-show="showArticleModal" x-transition x-cloak class="fixed inset-0 z-[250] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+        <div class="bg-white w-full max-w-2xl rounded-[3rem] p-8 md:p-10 shadow-2xl space-y-6 my-8">
+            <h3 class="text-2xl font-black text-slate-900 tracking-tight" x-text="articleForm.id ? 'Edit Article' : 'Publish New Article'"></h3>
+            <form @submit.prevent="saveArticle()" class="space-y-4">
+                <div>
+                    <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Title</label>
+                    <input type="text" x-model="articleForm.title" placeholder="Article title..." class="w-full mt-1 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold focus:outline-none focus:border-emerald-500" required>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Category</label>
+                        <input type="text" x-model="articleForm.category" placeholder="e.g. ENERGY AUDIT" class="w-full mt-1 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold focus:outline-none focus:border-emerald-500" required>
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Read Time</label>
+                        <input type="text" x-model="articleForm.readTime" placeholder="e.g. 9 MIN READ" class="w-full mt-1 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold focus:outline-none focus:border-emerald-500" required>
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Primary Source</label>
+                        <input type="text" x-model="articleForm.source" placeholder="e.g. WRAP UK" class="w-full mt-1 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold focus:outline-none focus:border-emerald-500">
+                    </div>
+                </div>
+                <div>
+                    <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Cover Image URL (Optional — Auto-generated if blank)</label>
+                    <input type="url" x-model="articleForm.image" placeholder="Leave blank for automatic vector cover or paste URL..." class="w-full mt-1 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold focus:outline-none focus:border-emerald-500">
+                </div>
+                <div>
+                    <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Snippet / Summary</label>
+                    <textarea x-model="articleForm.snippet" rows="2" placeholder="Short preview text..." class="w-full mt-1 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold focus:outline-none focus:border-emerald-500" required></textarea>
+                </div>
+                <div>
+                    <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">Full HTML Content</label>
+                    <textarea x-model="articleForm.content" rows="4" placeholder="<p>Full article text...</p>" class="w-full mt-1 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold focus:outline-none focus:border-emerald-500" required></textarea>
+                </div>
+                <div class="flex gap-3 pt-2">
+                    <button type="button" @click="showArticleModal = false" class="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl text-xs font-black uppercase tracking-wider hover:bg-slate-200 transition">Cancel</button>
+                    <button type="submit" class="flex-1 py-4 eco-gradient text-white rounded-2xl text-xs font-black uppercase tracking-wider shadow-lg hover:opacity-95 transition">Save Article</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- TOAST NOTIFICATION -->
+    <div x-show="toast.show" x-transition class="fixed bottom-6 right-6 z-[300] bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3">
+        <i data-lucide="check-circle" class="w-5 h-5 text-emerald-400"></i>
+        <span class="text-xs font-bold tracking-wide" x-text="toast.message"></span>
+    </div>
+
+    <!-- SCRIPTS & APP LOGIC -->
+    <script>
+        const FIREBASE_DB_ROOT = "https://ecocampus-guide-default-rtdb.europe-west1.firebasedatabase.app/";
+        const FIREBASE_REST_URL = "https://ecocampus-guide-default-rtdb.europe-west1.firebasedatabase.app/ecocampus_shared.json";
+        
+        // Фиксированная дата старта проекта для аккаунта разработчика (4 ноября 2026 -> 8-й день 11 ноября 2026 на всех устройствах)
+        const DEVELOPER_START_TIMESTAMP = new Date(2026, 10, 4, 0, 0, 0).getTime();
+
+        // Генератор прямого встроенного SVG-пейзажа
+        function buildInlineLandscapeSvg(theme, title, subtitle) {
+            const palettes = {
+                taiga:   { c1: '#064e3b', c2: '#059669', accent: '#34d399', sun: '#a7f3d0' },
+                tiger:   { c1: '#7c2d12', c2: '#d97706', accent: '#fbbf24', sun: '#fde68a' },
+                ocean:   { c1: '#0f172a', c2: '#0284c7', accent: '#38bdf8', sun: '#bae6fd' },
+                recycle: { c1: '#065f46', c2: '#10b981', accent: '#6ee7b7', sun: '#d1fae5' },
+                solar:   { c1: '#1e3a8a', c2: '#0d9488', accent: '#2dd4bf', sun: '#fef08a' },
+                earth:   { c1: '#14532d', c2: '#16a34a', accent: '#86efac', sun: '#dcfce7' },
+                climate: { c1: '#0c4a6e', c2: '#0369a1', accent: '#7dd3fc', sun: '#e0f2fe' },
+                panda:   { c1: '#134e4a', c2: '#059669', accent: '#5eead4', sun: '#ccfbf1' }
+            };
+            const p = palettes[theme] || palettes.taiga;
+            const uid = theme + '_' + Math.random().toString(36).substring(2, 7);
+            const safeTitle = String(title || '').replace(/&/g, '&amp;');
+            const safeSub = String(subtitle || '').replace(/&/g, '&amp;');
+
+            return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 460" class="w-full h-full object-cover" preserveAspectRatio="xMidYMid slice">
+                <defs>
+                    <linearGradient id="bg_${uid}" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stop-color="${p.c1}"/>
+                        <stop offset="100%" stop-color="${p.c2}"/>
+                    </linearGradient>
+                    <linearGradient id="hill_${uid}" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stop-color="${p.accent}" stop-opacity="0.32"/>
+                        <stop offset="100%" stop-color="${p.c1}" stop-opacity="0.88"/>
+                    </linearGradient>
+                </defs>
+                <rect width="800" height="460" fill="url(#bg_${uid})"/>
+                <line x1="0" y1="115" x2="800" y2="115" stroke="#ffffff" stroke-opacity="0.06" stroke-width="1"/>
+                <line x1="0" y1="230" x2="800" y2="230" stroke="#ffffff" stroke-opacity="0.06" stroke-width="1"/>
+                <line x1="200" y1="0" x2="200" y2="460" stroke="#ffffff" stroke-opacity="0.05" stroke-width="1"/>
+                <line x1="600" y1="0" x2="600" y2="460" stroke="#ffffff" stroke-opacity="0.05" stroke-width="1"/>
+                <circle cx="650" cy="110" r="85" fill="${p.sun}" fill-opacity="0.16"/>
+                <circle cx="650" cy="110" r="48" fill="${p.sun}" fill-opacity="0.28"/>
+                <path d="M0 320 L140 210 L290 295 L480 175 L650 280 L800 195 L800 460 L0 460 Z" fill="url(#hill_${uid})"/>
+                <path d="M0 365 Q200 310 400 360 T800 335 L800 460 L0 460 Z" fill="#000000" fill-opacity="0.26"/>
+                <path d="M0 405 Q260 370 520 405 T800 390 L800 460 L0 460 Z" fill="#000000" fill-opacity="0.36"/>
+                <circle cx="400" cy="165" r="46" fill="#ffffff" fill-opacity="0.12" stroke="#ffffff" stroke-opacity="0.35" stroke-width="2"/>
+                <circle cx="400" cy="165" r="22" fill="${p.accent}" fill-opacity="0.48"/>
+                <text x="400" y="268" text-anchor="middle" fill="#ffffff" font-family="Plus Jakarta Sans, Arial, sans-serif" font-weight="800" font-size="26" letter-spacing="3">${safeTitle}</text>
+                <text x="400" y="298" text-anchor="middle" fill="${p.sun}" font-family="Plus Jakarta Sans, Arial, sans-serif" font-weight="700" font-size="13" letter-spacing="2.2">${safeSub}</text>
+            </svg>`;
+        }
+
+        const DEFAULT_ARTICLES = [];
+        const LEGACY_DEFAULT_IDS = ['1', '2', '3', '4', '5', '6', 'art_1', 'art_2', 'art_3', 'art_4', 'art_5', 'art_6'];
+        const LEGACY_DEFAULT_TITLES = [
+            'Global Footprint Network — Carbon Accounting Metrics',
+            'WRAP UK — Recycling in Schools & Campuses',
+            'WRAP UK — Food Waste in Schools Full Guide',
+            'Campus Grid Optimization & Peak Load Reduction',
+            'IT Lifecycle & E-Waste Recovery Protocols',
+            'Institutional Greywater & Hydro-Conservation'
+        ];
+
+        const TEN_DEFAULT_HABITS = [
+            { id: 1, name: 'Brought reusable water bottle or thermos', category: 'Zero Waste', val: 10, checked: false },
+            { id: 2, name: 'Sorted paper, cardboard & plastic into recycling bins', category: 'Recycling', val: 15, checked: false },
+            { id: 3, name: 'Turned off lights & unplugged chargers when leaving', category: 'Energy', val: 20, checked: false },
+            { id: 4, name: 'Used digital notes instead of printing paper handouts', category: 'Paperless', val: 15, checked: false },
+            { id: 5, name: 'Chose a plant-based or zero-food-waste cafeteria meal', category: 'Food Systems', val: 25, checked: false },
+            { id: 6, name: 'Walked, cycled, or used public transit to reach campus', category: 'Mobility', val: 30, checked: false },
+            { id: 7, name: 'Refused single-use plastic bags, straws & cutlery', category: 'Plastic-Free', val: 15, checked: false },
+            { id: 8, name: 'Took stairs instead of the elevator', category: 'Energy Conservation', val: 10, checked: false },
+            { id: 9, name: 'Collected used batteries or small electronics for e-waste', category: 'E-Waste Protocol', val: 40, checked: false },
+            { id: 10, name: 'Participated in campus clean-up or shared an eco-guide', category: 'Stewardship', val: 50, checked: false }
+        ];
+
+        // База из 15 научных эко-вопросов для ежедневной ротации
+        const DEFAULT_QUIZ_BANK = [
+            { id: 'q_1', category: 'SCHOOL WASTE SCALE', question: 'According to WRAP UK research, what percentage of school waste is theoretically recyclable or recoverable?', options: ['Around 20%', 'Around 45%', 'Over 80%', 'Less than 10%'], correct: 2, fact: 'Over 80% of school waste (paper, food organics, plastics) is recoverable, yet actual recycling rates average only 20% — creating the Institutional Recovery Gap.' },
+            { id: 'q_2', category: 'RECYCLING TRAPS', question: 'Why can standard disposable paper coffee cups NOT be recycled in regular paper bins?', options: ['They are too small', 'They are lined with a thin polyethylene plastic film', 'Coffee stains make paper toxic', 'They are made of bamboo'], correct: 1, fact: 'Disposable coffee cups have an internal waterproof plastic coating bonded to the paper, requiring specialized industrial separation.' },
+            { id: 'q_3', category: 'E-WASTE PROTOCOL', question: 'How many liters of groundwater can a single improperly discarded AA battery contaminate with heavy metals?', options: ['Up to 400 liters', 'Only 1 liter', 'Around 10 liters', 'Batteries dissolve safely'], correct: 0, fact: 'One AA battery corrodes in landfill and leaches heavy metals (zinc, manganese, lithium) into approximately 400 liters of soil water.' },
+            { id: 'q_4', category: 'ENERGY AUDITS', question: 'By how much can automated LED sensors and HVAC schedule optimization reduce a school’s annual electricity consumption?', options: ['2–3%', 'Up to 28%', 'Over 90%', 'It increases consumption'], correct: 1, fact: 'EPA Energy Star school audits demonstrate that smart lighting and HVAC scheduling cut baseline electricity expenditure by up to 28% annually.' },
+            { id: 'q_5', category: 'RESOURCE CONSERVATION', question: 'How many mature pine trees are saved from logging for every 1,000 kg (1 tonne) of office and notebook paper recycled?', options: ['1 tree', '5 trees', '17 mature trees', '100 trees'], correct: 2, fact: 'Recycling 1 tonne of paper saves approximately 17 mature trees, 26,000 liters of water, and 4,000 kWh of electricity.' },
+            { id: 'q_6', category: 'RUSSIAN CONSERVATION', question: 'In what year was VOOP (All-Russian Society for Nature Conservation), Russia’s oldest public eco-organization, founded?', options: ['1924', '1961', '1991', '2013'], correct: 0, fact: 'VOOP was founded in 1924 by leading Russian scientists and has protected biodiversity, forests, and rivers for over a century.' },
+            { id: 'q_7', category: 'BIODIVERSITY', question: 'Approximately how many Amur tigers currently live in the wild in the Russian Far East thanks to conservation efforts?', options: ['Under 50', 'Over 750 tigers', 'Around 10,000', 'They are extinct in the wild'], correct: 1, fact: 'Thanks to anti-poaching patrols and the Amur Tiger Center, the Russian population has recovered from the brink of extinction to over 750 individuals.' },
+            { id: 'q_8', category: 'FOOD SYSTEMS', question: 'What is the single largest component by weight in municipal school cafeteria waste?', options: ['Aluminum cans', 'Glass bottles', 'Organic food leftovers', 'Plastic straws'], correct: 2, fact: 'Food waste accounts for 30–40% of total school waste weight and generates methane gas when sent to landfills instead of composting.' },
+            { id: 'q_9', category: 'HYDRO-CONSERVATION', question: 'How much municipal water can a school save simply by installing low-flow aerators on restroom and lab faucets?', options: ['30–40% of faucet water', 'Less than 1%', '100%', 'Aerators use more water'], correct: 0, fact: 'Faucet aerators mix air into the water stream, maintaining pressure while cutting water volume by 30% to 40% immediately.' },
+            { id: 'q_10', category: 'PLASTIC LIFECYCLE', question: 'Which polymer code on the bottom of a clear water bottle indicates PET (#1) — the most widely recyclable plastic?', options: ['Triangle #1 (PET/PETE)', 'Triangle #3 (PVC)', 'Triangle #6 (Polystyrene)', 'Triangle #7 (Other)'], correct: 0, fact: 'PET (#1) and HDPE (#2) are the most valuable and easily recyclable plastics worldwide.' },
+            { id: 'q_11', category: 'CARBON FOOTPRINT', question: 'What does "Earth Overshoot Day" calculated by the Global Footprint Network measure?', options: ['The hottest day of summer', 'The date when humanity’s resource consumption exceeds Earth’s annual regeneration', 'The day schools close for summer', 'A solar eclipse'], correct: 1, fact: 'Earth Overshoot Day marks the date when human demand for ecological resources in a given year exceeds what Earth can regenerate in that year.' },
+            { id: 'q_12', category: 'CIRCULAR ECONOMY', question: 'Compared to smelting new aluminum from bauxite ore, how much energy does recycling aluminum cans save?', options: ['10%', '50%', '95% of energy', 'No energy saved'], correct: 2, fact: 'Recycling aluminum saves 95% of the energy required to produce virgin aluminum and can be repeated infinitely without quality loss.' },
+            { id: 'q_13', category: 'PHANTOM LOAD', question: 'What is "vampire power" (phantom load) in school computer labs?', options: ['Electricity consumed by devices left plugged in on standby mode', 'Solar power generated at night', 'Static electricity on carpets', 'Battery corrosion'], correct: 0, fact: 'Unplugging chargers, projectors, and lab monitors after classes eliminates phantom standby load, saving up to 10% on room energy bills.' },
+            { id: 'q_14', category: 'PAPERLESS CAMPUS', question: 'How many liters of water are required to manufacture just ONE standard A4 sheet of virgin white paper?', options: ['0.01 liters', 'Up to 10 liters of water', '500 liters', 'Paper requires no water'], correct: 1, fact: 'From forestry and pulp bleaching to pressing, producing a single A4 sheet of paper consumes between 5 and 10 liters of water.' },
+            { id: 'q_15', category: 'SURVEY INSIGHTS', question: 'In our EcoCampus Guide student survey (N = 56), what percentage of respondents confirmed that an English-language eco-platform is useful?', options: ['21.4%', '50.0%', '78.6% (44 of 56 respondents)', '10.0%'], correct: 2, fact: '78.6% of surveyed students supported the platform — highlighting its dual value for campus sustainability and English practice.' }
+        ];
+
+        // База из 10 предметов для мини-игры Waste Sorting Blitz
+        const DEFAULT_SORTING_BANK = [
+            { id: 's_1', name: 'Disposable Paper Coffee Cup (Plastic-Lined)', emoji: '☕', bin: 'organic', tip: 'Watch out! Standard coffee cups have a thin inner polyethylene film bonded to the paper — they cannot go into the Paper bin!' },
+            { id: 's_2', name: 'Clear Plastic Water Bottle (PET #1, Emptied)', emoji: '🍼', bin: 'plastic', tip: 'Correct! Emptied and crushed PET #1 bottles are 100% recyclable into new fibers and containers.' },
+            { id: 's_3', name: 'Used AA Alkaline / Lithium Battery', emoji: '🔋', bin: 'ewaste', tip: 'Batteries contain toxic heavy metals and must ONLY go into designated E-Waste & Battery collection boxes.' },
+            { id: 's_4', name: 'Used Classroom Notebook Paper & Cardboard', emoji: '📄', bin: 'paper', tip: 'Clean paper and flattened cardboard boxes belong in the Paper & Cardboard recycling stream.' },
+            { id: 's_5', name: 'Cafeteria Apple Core & Banana Peel', emoji: '🍌', bin: 'organic', tip: 'Food scraps belong in Organic / Composting or General waste — never mix wet organics with dry paper or plastic!' },
+            { id: 's_6', name: 'Aluminum Soda Can (Crushed)', emoji: '🥫', bin: 'plastic', tip: 'Aluminum cans go into the Plastic & Metal stream — recycling them saves 95% of production energy!' },
+            { id: 's_7', name: 'Broken USB Flash Drive & Charging Cable', emoji: '🔌', bin: 'ewaste', tip: 'Small electronics and cables contain copper and circuit solder — they must be recycled via E-Waste protocols.' },
+            { id: 's_8', name: 'Greasy Pizza Box Bottom with Cheese Stains', emoji: '🍕', bin: 'organic', tip: 'Trap avoided! Grease and oil ruin paper pulp batches. Tear off the clean lid for Paper, but put the greasy bottom in Organic/General.' },
+            { id: 's_9', name: 'Printed Scientific Handout & Magazine', emoji: '📰', bin: 'paper', tip: 'Printed sheets, newspapers, and magazines are high-grade cellulose fiber for the Paper bin.' },
+            { id: 's_10', name: 'HDPE #2 Shampoo / Detergent Bottle', emoji: '🧴', bin: 'plastic', tip: 'HDPE #2 rigid plastic containers are highly recyclable in the Plastic & Metal container.' }
+        ];
+
+        function ecoApp() {
+            return {
+                currentUser: null,
+                authMode: 'login',
+                pendingVerification: false,
+                generatedCode: '',
+                enteredCode: '',
+                authForm: { name: '', email: '', password: '', role: 'individual', school: '' },
+                
+                showOrgVerifyModal: false,
+                orgVerifyCode: '',
+                orgVerifyInput: '',
+                orgVerifyForm: { position: 'School Director', school: '' },
+
+                activeTab: 'dashboard',
+                mobileMenu: false,
+                cloudConnected: false,
+                searchQuery: '',
+                selectedArticle: null,
+                showArticleModal: false,
+                
+                toast: { show: false, message: '' },
+
+                user: { 
+                    coins: 0,
+                    spentCoins: 0,
+                    bonusCoins: 0,
+                    joinedAt: Date.now(),
+                    attendedEvents: [],
+                    hostedEventsCount: 0
+                },
+
+                cloudProfiles: {},
+
+                // Challenge State: 'catalog' (default hub choice), 'quiz', or 'sorting'
+                challengeView: 'catalog',
+                quizBank: [...DEFAULT_QUIZ_BANK],
+                deletedQuizIds: [],
+                quizIndex: 0,
+                quizScore: 0,
+                quizSelected: null,
+                quizCompleted: false,
+                quizShuffleSeed: 0,
+                showQuizModal: false,
+                quizForm: { id: null, category: 'RECYCLING SCIENCE', question: '', opt0: '', opt1: '', opt2: '', opt3: '', correct: 0, fact: '' },
+
+                sortingBank: [...DEFAULT_SORTING_BANK],
+                deletedSortIds: [],
+                sortIndex: 0,
+                sortScore: 0,
+                sortSelectedBin: null,
+                sortFeedback: null,
+                sortCompleted: false,
+                sortShuffleSeed: 0,
+                showSortModal: false,
+                sortForm: { id: null, name: '', emoji: '♻️', bin: 'plastic', tip: '' },
+
+                sortingBins: [
+                    { id: 'paper', name: 'Paper & Cardboard', sub: 'Clean sheets, notebooks, boxes', emoji: '📘' },
+                    { id: 'plastic', name: 'Plastic & Metal', sub: 'PET #1, HDPE #2, aluminum cans', emoji: '♻️' },
+                    { id: 'ewaste', name: 'E-Waste & Batteries', sub: 'Batteries, cables, electronics', emoji: '🔋' },
+                    { id: 'organic', name: 'Organic / General', sub: 'Food scraps, lined cups, soiled items', emoji: '🍏' }
+                ],
+
+                habits: JSON.parse(JSON.stringify(TEN_DEFAULT_HABITS)),
+
+                marketplace: [
+                    { name: 'Eco Sticker Pack', cost: 50, icon: '🏷️' },
+                    { name: 'Cafeteria Green Pass', cost: 120, icon: '🥗' },
+                    { name: 'Reusable Metal Straw', cost: 200, icon: '✨' },
+                    { name: 'Tree Planting Sponsorship', cost: 350, icon: '🌳' }
+                ],
+
+                globalOrgs: [
+                    { 
+                        name: 'VOOP (All-Russian Society for Nature Conservation)', 
+                        isRussian: true,
+                        badge: '🇷🇺 Russian Authority',
+                        founded: 'Est. 1924',
+                        region: 'Russia • 85+ Regions',
+                        desc: 'The oldest and largest public environmental organization in Russia. Focuses on biodiversity preservation, forest and water protection, public eco-monitoring, and nationwide student volunteer initiatives.', 
+                        tags: ['Forest & Water', 'Public Eco-Control', 'Volunteering'],
+                        metric: '100+ Years of Nature Protection',
+                        url: 'https://voop-rf.ru', 
+                        bannerHtml: buildInlineLandscapeSvg('taiga', 'VOOP RUSSIA', 'ALL-RUSSIAN NATURE CONSERVATION'),
+                        svgIcon: `<svg class="w-8 h-8 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>`
+                    },
+                    { 
+                        name: 'Amur Tiger Center', 
+                        isRussian: true,
+                        badge: '🇷🇺 Russian Authority',
+                        founded: 'Est. 2013',
+                        region: 'Russian Far East',
+                        desc: 'Autonomous non-profit organization specializing in the study, conservation, and population growth of the endangered Amur tiger, anti-poaching patrols, and environmental education.', 
+                        tags: ['Rare Species', 'Anti-Poaching', 'Taiga Habitat'],
+                        metric: '750+ Amur Tigers Protected',
+                        url: 'https://amur-tiger.ru', 
+                        bannerHtml: buildInlineLandscapeSvg('tiger', 'AMUR TIGER CENTER', 'FAR EAST WILDLIFE PROTECTION'),
+                        svgIcon: `<svg class="w-8 h-8 text-amber-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/></svg>`
+                    },
+                    { 
+                        name: 'Global Footprint Network', 
+                        isRussian: false,
+                        badge: '🌍 International',
+                        founded: 'Est. 2003',
+                        region: 'Global • 200+ Countries',
+                        desc: 'International research organization pioneering ecological footprint accounting and Earth Overshoot Day metrics to help institutions measure resource demand vs. biocapacity.', 
+                        tags: ['Carbon Accounting', 'Biocapacity', 'Overshoot Data'],
+                        metric: 'Global Ecological Metrics Standard',
+                        url: 'https://www.footprintnetwork.org', 
+                        bannerHtml: buildInlineLandscapeSvg('ocean', 'GLOBAL FOOTPRINT', 'CARBON AND BIOCAPACITY METRICS'),
+                        svgIcon: `<svg class="w-8 h-8 text-sky-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`
+                    },
+                    { 
+                        name: 'WRAP UK', 
+                        isRussian: false,
+                        badge: '🌍 International',
+                        founded: 'Est. 2000',
+                        region: 'UK & 40+ Nations',
+                        desc: 'Climate action NGO transforming institutional resource use through systemic school recycling protocols, circular economy standards, and cafeteria food waste reduction.', 
+                        tags: ['Circular Economy', 'Food Systems', 'Zero Waste'],
+                        metric: '80% School Waste Recoverability',
+                        url: 'https://www.wrap.org.uk', 
+                        bannerHtml: buildInlineLandscapeSvg('recycle', 'WRAP UK', 'CIRCULAR ECONOMY AND RECYCLING'),
+                        svgIcon: `<svg class="w-8 h-8 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>`
+                    },
+                    { 
+                        name: 'EPA Sustainable Schools', 
+                        isRussian: false,
+                        badge: '🌍 International',
+                        founded: 'Est. 1970',
+                        region: 'United States',
+                        desc: 'Federal environmental framework providing technical guidelines for green school infrastructure, Energy Star building audits, hydro-conservation, and safe e-waste recovery.', 
+                        tags: ['Energy Star Audits', 'Clean Water', 'Green Campuses'],
+                        metric: '28% Campus Energy Reduction',
+                        url: 'https://www.epa.gov', 
+                        bannerHtml: buildInlineLandscapeSvg('solar', 'EPA GREEN SCHOOLS', 'INFRASTRUCTURE AND ENERGY AUDITS'),
+                        svgIcon: `<svg class="w-8 h-8 text-teal-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/></svg>`
+                    },
+                    { 
+                        name: 'Earth Day Network', 
+                        isRussian: false,
+                        badge: '🌍 International',
+                        founded: 'Est. 1970',
+                        region: '192 Countries',
+                        desc: 'The world’s largest recruiter to the environmental movement, mobilizing over 1 billion citizens and tens of thousands of schools for climate literacy and reforestation.', 
+                        tags: ['Climate Literacy', 'Canopy Project', 'Youth Action'],
+                        metric: '1B+ Annual Civic Participants',
+                        url: 'https://www.earthday.org', 
+                        bannerHtml: buildInlineLandscapeSvg('earth', 'EARTH DAY NETWORK', 'GLOBAL YOUTH MOBILIZATION'),
+                        svgIcon: `<svg class="w-8 h-8 text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>`
+                    },
+                    { 
+                        name: 'UN Environment Programme', 
+                        isRussian: false,
+                        badge: '🌍 International',
+                        founded: 'Est. 1972',
+                        region: 'United Nations • 193 States',
+                        desc: 'The leading global environmental authority setting the international sustainability agenda, coordinating Youth & Education Alliances, and publishing Global E-Waste Monitors.', 
+                        tags: ['UN SDG Goals', 'E-Waste Monitor', 'Global Policy'],
+                        metric: '193 Member States Coordinated',
+                        url: 'https://www.unep.org', 
+                        bannerHtml: buildInlineLandscapeSvg('climate', 'UN ENVIRONMENT', 'GLOBAL SUSTAINABILITY AUTHORITY'),
+                        svgIcon: `<svg class="w-8 h-8 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>`
+                    },
+                    { 
+                        name: 'WWF (World Wide Fund for Nature)', 
+                        isRussian: false,
+                        badge: '🌍 International',
+                        founded: 'Est. 1961',
+                        region: 'Global • 100+ Countries',
+                        desc: 'Leading independent conservation organization working to preserve wilderness, reduce humanity’s ecological footprint, and organize the global Earth Hour educational campaign.', 
+                        tags: ['Earth Hour', 'Wildlife Preservation', 'Living Planet'],
+                        metric: '5M+ Global Conservation Supporters',
+                        url: 'https://www.worldwildlife.org', 
+                        bannerHtml: buildInlineLandscapeSvg('panda', 'WWF CONSERVATION', 'LIVING PLANET AND EARTH HOUR'),
+                        svgIcon: `<svg class="w-8 h-8 text-emerald-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`
+                    }
+                ],
+
+                calMonth: new Date().getMonth(),
+                calYear: new Date().getFullYear(),
+                selectedDay: null,
+                monthNames: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
+
+                newEvent: { title: '', day: new Date().getDate(), month: new Date().getMonth(), location: '', desc: '' },
+                events: [],
+
+                articles: [],
+                deletedArticleIds: [...LEGACY_DEFAULT_IDS, ...LEGACY_DEFAULT_TITLES],
+
+                feedbacks: [],
+                articleForm: { id: null, title: '', category: '', readTime: '', source: '', image: '', snippet: '', content: '' },
+
+                waterSaved: '0 L',
+                paperSaved: 0,
+                impactEquiv: 'Complete your first daily habit to start conserving campus resources!',
+
+                getInlineBannerHtml(theme, title, subtitle) {
+                    return buildInlineLandscapeSvg(theme, title, subtitle);
+                },
+
+                getTodayDateLabel() {
+                    return new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                },
+
+                // --- ECO CHALLENGE METHODS (DAILY QUIZ + SORTING BLITZ + DEV CRUD) ---
+                getFilteredQuizBank() {
+                    return this.quizBank.filter(q => q && !this.deletedQuizIds.includes(String(q.id)));
+                },
+
+                getActiveQuizSet() {
+                    const available = this.getFilteredQuizBank();
+                    if (available.length <= 5) return available;
+                    const now = new Date();
+                    const dayHash = now.getFullYear() * 1000 + (now.getMonth() + 1) * 40 + now.getDate() + this.quizShuffleSeed;
+                    const startIdx = dayHash % available.length;
+                    const result = [];
+                    for (let i = 0; i < 5; i++) {
+                        result.push(available[(startIdx + i * 3) % available.length]);
+                    }
+                    return result;
+                },
+
+                getCurrentQuestion() {
+                    const set = this.getActiveQuizSet();
+                    return set[this.quizIndex] || set[0] || { question: '', options: [], correct: 0, fact: '' };
+                },
+
+                selectQuizAnswer(idx) {
+                    if (this.quizSelected !== null) return;
+                    this.quizSelected = idx;
+                    const current = this.getCurrentQuestion();
+                    if (idx === Number(current.correct)) {
+                        this.quizScore++;
+                        this.user.bonusCoins = (this.user.bonusCoins || 0) + 10;
+                        this.updateStats(true);
+                    }
+                },
+
+                nextQuizQuestion() {
+                    const set = this.getActiveQuizSet();
+                    if (this.quizIndex + 1 < set.length) {
+                        this.quizIndex++;
+                        this.quizSelected = null;
+                    } else {
+                        this.quizCompleted = true;
+                    }
+                },
+
+                shuffleQuizSet() {
+                    this.quizShuffleSeed += 7;
+                    this.quizIndex = 0;
+                    this.quizScore = 0;
+                    this.quizSelected = null;
+                    this.quizCompleted = false;
+                },
+
+                getQuizCertificateTitle() {
+                    if (this.quizScore >= 5) return 'Institutional Eco-Visionary 🏆';
+                    if (this.quizScore >= 3) return 'Campus Sustainability Specialist 🌿';
+                    return 'Emerging Green Explorer 🌱';
+                },
+
+                // Sorting Blitz Logic
+                getFilteredSortBank() {
+                    return this.sortingBank.filter(s => s && !this.deletedSortIds.includes(String(s.id)));
+                },
+
+                getActiveSortingSet() {
+                    const available = this.getFilteredSortBank();
+                    if (available.length <= 6) return available;
+                    const startIdx = this.sortShuffleSeed % available.length;
+                    const result = [];
+                    for (let i = 0; i < 6; i++) {
+                        result.push(available[(startIdx + i * 2) % available.length]);
+                    }
+                    return result;
+                },
+
+                getCurrentSortItem() {
+                    const set = this.getActiveSortingSet();
+                    return set[this.sortIndex] || set[0] || { name: '', emoji: '📦', bin: 'plastic', tip: '' };
+                },
+
+                selectSortBin(binId) {
+                    if (this.sortFeedback !== null) return;
+                    this.sortSelectedBin = binId;
+                    const item = this.getCurrentSortItem();
+                    const isCorrect = binId === item.bin;
+                    if (isCorrect) {
+                        this.sortScore++;
+                        this.user.bonusCoins = (this.user.bonusCoins || 0) + 10;
+                        this.updateStats(true);
+                        this.sortFeedback = { correct: true, title: '✓ Spot On! (+10 EC Earned)' };
+                    } else {
+                        const targetBinName = (this.sortingBins.find(b => b.id === item.bin) || {}).name || item.bin;
+                        this.sortFeedback = { correct: false, title: '⚠️ Watch Out! Correct Bin: ' + targetBinName };
+                    }
+                },
+
+                nextSortItem() {
+                    const set = this.getActiveSortingSet();
+                    if (this.sortIndex + 1 < set.length) {
+                        this.sortIndex++;
+                        this.sortSelectedBin = null;
+                        this.sortFeedback = null;
+                    } else {
+                        this.sortCompleted = true;
+                    }
+                },
+
+                restartSortingGame() {
+                    this.sortShuffleSeed += 5;
+                    this.sortIndex = 0;
+                    this.sortScore = 0;
+                    this.sortSelectedBin = null;
+                    this.sortFeedback = null;
+                    this.sortCompleted = false;
+                },
+
+                // Developer CRUD for Quiz & Sorting Items
+                openQuizModal() {
+                    this.quizForm = { id: null, category: 'RECYCLING SCIENCE', question: '', opt0: '', opt1: '', opt2: '', opt3: '', correct: 0, fact: '' };
+                    this.showQuizModal = true;
+                },
+
+                editQuizQuestion(q) {
+                    this.quizForm = {
+                        id: q.id,
+                        category: q.category || 'RECYCLING SCIENCE',
+                        question: q.question,
+                        opt0: q.options[0] || '',
+                        opt1: q.options[1] || '',
+                        opt2: q.options[2] || '',
+                        opt3: q.options[3] || '',
+                        correct: Number(q.correct) || 0,
+                        fact: q.fact || ''
+                    };
+                    this.showQuizModal = true;
+                },
+
+                async saveQuizQuestion() {
+                    const newQ = {
+                        id: this.quizForm.id || ('q_' + Date.now()),
+                        category: this.quizForm.category,
+                        question: this.quizForm.question,
+                        options: [this.quizForm.opt0, this.quizForm.opt1, this.quizForm.opt2, this.quizForm.opt3],
+                        correct: Number(this.quizForm.correct),
+                        fact: this.quizForm.fact
+                    };
+                    if (this.quizForm.id) {
+                        const idx = this.quizBank.findIndex(q => String(q.id) === String(this.quizForm.id));
+                        if (idx !== -1) this.quizBank[idx] = newQ;
+                    } else {
+                        this.quizBank.unshift(newQ);
+                    }
+                    this.showQuizModal = false;
+                    await this.syncToCloud();
+                    this.triggerToast('Quiz question saved & synced globally!');
+                },
+
+                async deleteQuizQuestion(id) {
+                    const idStr = String(id);
+                    if (!this.deletedQuizIds.includes(idStr)) this.deletedQuizIds.push(idStr);
+                    this.quizBank = this.quizBank.filter(q => String(q.id) !== idStr);
+                    this.quizIndex = 0;
+                    this.quizSelected = null;
+                    await this.syncToCloud();
+                    this.triggerToast('Question deleted across all devices.');
+                },
+
+                openSortModal() {
+                    this.sortForm = { id: null, name: '', emoji: '♻️', bin: 'plastic', tip: '' };
+                    this.showSortModal = true;
+                },
+
+                editSortItem(item) {
+                    this.sortForm = { ...item };
+                    this.showSortModal = true;
+                },
+
+                async saveSortItem() {
+                    const newItem = {
+                        id: this.sortForm.id || ('s_' + Date.now()),
+                        name: this.sortForm.name,
+                        emoji: this.sortForm.emoji || '📦',
+                        bin: this.sortForm.bin,
+                        tip: this.sortForm.tip
+                    };
+                    if (this.sortForm.id) {
+                        const idx = this.sortingBank.findIndex(s => String(s.id) === String(this.sortForm.id));
+                        if (idx !== -1) this.sortingBank[idx] = newItem;
+                    } else {
+                        this.sortingBank.unshift(newItem);
+                    }
+                    this.showSortModal = false;
+                    await this.syncToCloud();
+                    this.triggerToast('Sorting item saved & synced globally!');
+                },
+
+                async deleteSortItem(id) {
+                    const idStr = String(id);
+                    if (!this.deletedSortIds.includes(idStr)) this.deletedSortIds.push(idStr);
+                    this.sortingBank = this.sortingBank.filter(s => String(s.id) !== idStr);
+                    this.sortIndex = 0;
+                    this.sortFeedback = null;
+                    await this.syncToCloud();
+                    this.triggerToast('Sorting item deleted across all devices.');
+                },
+
+                getUserKey() {
+                    if (!this.currentUser) return null;
+                    if (this.isDeveloper()) return 'kiruzoid155';
+                    const raw = (this.currentUser.email || this.currentUser.name || 'guest').toLowerCase().trim();
+                    return raw.replace(/[^a-z0-9]/g, '_');
+                },
+
+                ensureConsistentTenure() {
+                    if (!this.currentUser) return;
+                    if (this.isDeveloper()) {
+                        this.user.joinedAt = DEVELOPER_START_TIMESTAMP;
+                        try { localStorage.setItem('ecocampus_joined_at_v6', String(this.user.joinedAt)); } catch(e){}
+                    } else {
+                        const key = this.getUserKey();
+                        if (key && this.cloudProfiles && this.cloudProfiles[key] && this.cloudProfiles[key].joinedAt) {
+                            this.user.joinedAt = Math.min(this.user.joinedAt || Date.now(), Number(this.cloudProfiles[key].joinedAt));
+                            try { localStorage.setItem('ecocampus_joined_at_v6', String(this.user.joinedAt)); } catch(e){}
+                        }
+                    }
+                },
+
+                isArticleDeleted(art) {
+                    if (!art) return true;
+                    const rawId = String(art.id);
+                    const altId = rawId.startsWith('art_') ? rawId.replace('art_', '') : ('art_' + rawId);
+                    if (LEGACY_DEFAULT_IDS.includes(rawId) || LEGACY_DEFAULT_IDS.includes(altId)) return true;
+                    if (art.title && LEGACY_DEFAULT_TITLES.includes(art.title.trim())) return true;
+                    return this.deletedArticleIds.includes(rawId) || 
+                           this.deletedArticleIds.includes(altId) || 
+                           this.deletedArticleIds.includes(art.title);
+                },
+
+                applyCloudState(data) {
+                    if (!data) return;
+                    if (data.deletedArticleIds) {
+                        const cloudDel = Array.isArray(data.deletedArticleIds) ? data.deletedArticleIds : Object.values(data.deletedArticleIds);
+                        this.deletedArticleIds = Array.from(new Set([...this.deletedArticleIds, ...cloudDel.map(String)]));
+                        try { localStorage.setItem('ecocampus_deleted_ids', JSON.stringify(this.deletedArticleIds)); } catch(e){}
+                    }
+
+                    if (data.deletedQuizIds) {
+                        const qDel = Array.isArray(data.deletedQuizIds) ? data.deletedQuizIds : Object.values(data.deletedQuizIds);
+                        this.deletedQuizIds = Array.from(new Set([...this.deletedQuizIds, ...qDel.map(String)]));
+                    }
+                    if (data.quizBank) {
+                        const cloudQ = Array.isArray(data.quizBank) ? data.quizBank : Object.values(data.quizBank);
+                        if (cloudQ.length > 0) {
+                            this.quizBank = cloudQ.filter(q => q && !this.deletedQuizIds.includes(String(q.id)));
+                        }
+                    }
+
+                    if (data.deletedSortIds) {
+                        const sDel = Array.isArray(data.deletedSortIds) ? data.deletedSortIds : Object.values(data.deletedSortIds);
+                        this.deletedSortIds = Array.from(new Set([...this.deletedSortIds, ...sDel.map(String)]));
+                    }
+                    if (data.sortingBank) {
+                        const cloudS = Array.isArray(data.sortingBank) ? data.sortingBank : Object.values(data.sortingBank);
+                        if (cloudS.length > 0) {
+                            this.sortingBank = cloudS.filter(s => s && !this.deletedSortIds.includes(String(s.id)));
+                        }
+                    }
+
+                    if (data.users && typeof data.users === 'object') {
+                        this.cloudProfiles = data.users;
+                        const key = this.getUserKey();
+                        if (key && this.cloudProfiles[key]) {
+                            const prof = this.cloudProfiles[key];
+                            if (prof.joinedAt && !this.isDeveloper()) {
+                                this.user.joinedAt = Math.min(this.user.joinedAt || Date.now(), Number(prof.joinedAt));
+                            }
+                            if (Array.isArray(prof.checkedHabitIds)) {
+                                this.habits.forEach(h => {
+                                    if (prof.checkedHabitIds.includes(h.id)) h.checked = true;
+                                });
+                            }
+                            if (Array.isArray(prof.attendedEvents)) {
+                                this.user.attendedEvents = Array.from(new Set([...this.user.attendedEvents, ...prof.attendedEvents.map(String)]));
+                            }
+                            if (typeof prof.hostedEventsCount === 'number') {
+                                this.user.hostedEventsCount = Math.max(this.user.hostedEventsCount || 0, prof.hostedEventsCount);
+                            }
+                            if (typeof prof.bonusCoins === 'number') {
+                                this.user.bonusCoins = Math.max(this.user.bonusCoins || 0, prof.bonusCoins);
+                            }
+                            this.updateStats(false);
+                        }
+                    }
+
+                    this.ensureConsistentTenure();
+
+                    if (data.articles) {
+                        const cloudArticles = Array.isArray(data.articles) ? data.articles : Object.values(data.articles);
+                        this.articles = cloudArticles
+                            .filter(a => a && !this.isArticleDeleted(a))
+                            .map(a => ({
+                                ...a,
+                                image: (a.image && a.image.startsWith('http') && !a.image.includes('unsplash.com')) ? a.image : '',
+                                source: a.source || a.author || 'EcoCampus Research'
+                            }));
+                    } else {
+                        this.articles = [];
+                    }
+
+                    if (this.selectedArticle && this.isArticleDeleted(this.selectedArticle)) {
+                        this.selectedArticle = null;
+                    }
+
+                    if (data.events) {
+                        this.events = Array.isArray(data.events) ? data.events : Object.values(data.events);
+                    } else if (data.initialized) {
+                        this.events = [];
+                    }
+
+                    if (data.feedbacks) {
+                        this.feedbacks = Array.isArray(data.feedbacks) ? data.feedbacks : Object.values(data.feedbacks);
+                    }
+                    this.cloudConnected = true;
+                },
+
+                async init() {
+                    localStorage.removeItem('ecocampus_real_articles_v4');
+
+                    const savedUser = localStorage.getItem('ecocampus_current_user');
+                    if (savedUser) {
+                        try { this.currentUser = JSON.parse(savedUser); } catch(e){}
+                    }
+
+                    const savedHabits = localStorage.getItem('ecocampus_habits_v6');
+                    if (savedHabits) {
+                        try {
+                            const parsed = JSON.parse(savedHabits);
+                            if (Array.isArray(parsed) && parsed.length === 10) {
+                                this.habits = parsed;
+                            }
+                        } catch(e){}
+                    }
+
+                    const savedSpent = localStorage.getItem('ecocampus_spent_coins_v6');
+                    if (savedSpent !== null) this.user.spentCoins = Number(savedSpent);
+
+                    const savedBonus = localStorage.getItem('ecocampus_bonus_coins_v6');
+                    if (savedBonus !== null) this.user.bonusCoins = Number(savedBonus);
+
+                    const savedJoined = localStorage.getItem('ecocampus_joined_at_v6');
+                    if (savedJoined !== null) {
+                        this.user.joinedAt = Number(savedJoined);
+                    } else {
+                        this.user.joinedAt = Date.now();
+                        try { localStorage.setItem('ecocampus_joined_at_v6', String(this.user.joinedAt)); } catch(e){}
+                    }
+
+                    this.ensureConsistentTenure();
+
+                    const savedAttended = localStorage.getItem('ecocampus_attended_events_v6');
+                    if (savedAttended) {
+                        try { this.user.attendedEvents = JSON.parse(savedAttended); } catch(e){}
+                    }
+
+                    const savedHosted = localStorage.getItem('ecocampus_hosted_count_v6');
+                    if (savedHosted !== null) this.user.hostedEventsCount = Number(savedHosted);
+
+                    const savedDeleted = localStorage.getItem('ecocampus_deleted_ids');
+                    if (savedDeleted) {
+                        try {
+                            const parsedDel = JSON.parse(savedDeleted);
+                            this.deletedArticleIds = Array.from(new Set([...this.deletedArticleIds, ...parsedDel.map(String)]));
+                        } catch(e){}
+                    }
+
+                    this.articles = [];
+                    this.updateStats(false);
+
+                    await this.loadFromCloud();
+                    await this.syncToCloud();
+
+                    if (typeof firebase !== 'undefined') {
+                        try {
+                            if (!firebase.apps.length) {
+                                firebase.initializeApp({ databaseURL: FIREBASE_DB_ROOT });
+                            }
+                            const dbRef = firebase.database().ref('ecocampus_shared');
+                            dbRef.on('value', (snapshot) => {
+                                const data = snapshot.val();
+                                if (data) this.applyCloudState(data);
+                            });
+                        } catch(e){}
+                    }
+
+                    setInterval(() => {
+                        this.loadFromCloud();
+                    }, 3000);
+
+                    setTimeout(() => lucide.createIcons(), 200);
+                },
+
+                async forceSync() {
+                    await this.syncToCloud();
+                    await this.loadFromCloud();
+                    this.triggerToast('Cloud state synchronized across devices!');
+                },
+
+                // Все вкладки без смайликов, чтобы гарантированно помещались в одну строчку
+                getTabs() {
+                    return [
+                        { id: 'dashboard', name: 'Dashboard' },
+                        { id: 'challenge', name: 'Challenge' },
+                        { id: 'knowledge', name: 'Knowledge' },
+                        { id: 'tracker', name: 'Habits' },
+                        { id: 'orgs', name: 'Movement' },
+                        { id: 'events', name: 'Events' }
+                    ];
+                },
+
+                isDeveloper() {
+                    if (!this.currentUser) return false;
+                    const nameMatch = (this.currentUser.name || '').toLowerCase().includes('kiruzoid');
+                    const emailMatch = (this.currentUser.email || '').toLowerCase().includes('kiruzoid');
+                    return nameMatch || emailMatch;
+                },
+
+                isOrg() {
+                    return this.currentUser && this.currentUser.role === 'org';
+                },
+
+                openOrgVerificationModal() {
+                    this.orgVerifyCode = String(Math.floor(100000 + Math.random() * 900000));
+                    this.orgVerifyInput = '';
+                    this.orgVerifyForm.position = 'School Director';
+                    this.orgVerifyForm.school = (this.currentUser && this.currentUser.school) ? this.currentUser.school : '';
+                    this.showOrgVerifyModal = true;
+                    setTimeout(() => lucide.createIcons(), 100);
+                },
+
+                confirmOrgSwitch() {
+                    if (this.orgVerifyInput.trim() === this.orgVerifyCode) {
+                        this.currentUser.role = 'org';
+                        this.currentUser.orgTitle = this.orgVerifyForm.position || 'Verified Organization / Director';
+                        if (this.orgVerifyForm.school) {
+                            this.currentUser.school = this.orgVerifyForm.school;
+                        }
+                        localStorage.setItem('ecocampus_current_user', JSON.stringify(this.currentUser));
+                        this.showOrgVerifyModal = false;
+                        this.syncToCloud();
+                        this.triggerToast('Verified! Switched to Organization / Director account.');
+                    } else {
+                        alert('Invalid verification code! Please enter the 6-digit code displayed in the green box.');
+                    }
+                },
+
+                switchToIndividual() {
+                    if (this.currentUser) {
+                        this.currentUser.role = 'individual';
+                        localStorage.setItem('ecocampus_current_user', JSON.stringify(this.currentUser));
+                        this.syncToCloud();
+                        this.triggerToast('Switched to Student / Volunteer account.');
+                    }
+                },
+
+                formatJoinDate() {
+                    const ts = this.isDeveloper() ? DEVELOPER_START_TIMESTAMP : (this.user.joinedAt || Date.now());
+                    const d = new Date(ts);
+                    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                },
+
+                getRankRoadmap() {
+                    return [
+                        { level: 1, title: 'Eco Newcomer', period: 'Day 1', reqDays: 1, emoji: '🌱' },
+                        { level: 2, title: '1-Month Eco Explorer', period: '1 Month', reqDays: 30, emoji: '🌿' },
+                        { level: 3, title: 'Quarterly Green Guardian', period: '3 Months', reqDays: 90, emoji: '🪴' },
+                        { level: 4, title: 'Half-Year Sustainability Leader', period: '6 Months', reqDays: 180, emoji: '🌳' },
+                        { level: 5, title: 'Annual Institutional Legend', period: '1 Year', reqDays: 365, emoji: '🌍' }
+                    ];
+                },
+
+                getLevelInfo() {
+                    const startTs = this.isDeveloper() ? DEVELOPER_START_TIMESTAMP : (this.user.joinedAt || Date.now());
+                    const now = new Date();
+                    const startDay = new Date(startTs);
+                    startDay.setHours(0, 0, 0, 0);
+                    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                    const days = Math.max(1, Math.round((today.getTime() - startDay.getTime()) / 86400000) + 1);
+
+                    let level = 1;
+                    let title = 'Eco Newcomer';
+                    let emoji = '🌱';
+                    let tenureLabel = 'Under 1 Month';
+                    let shortBadge = 'LVL 1 • NEWCOMER';
+                    let nextMilestoneText = 'Next Rank: 1-Month Eco Explorer (at 30 Days)';
+                    let nextTargetDays = 30;
+                    let progress = Math.min(100, Math.round((days / 30) * 100));
+
+                    if (days >= 365) {
+                        level = 5;
+                        title = 'Annual Institutional Legend';
+                        emoji = '🌍';
+                        tenureLabel = '1 Year+ Tenure';
+                        shortBadge = 'LVL 5 • 1 YEAR+';
+                        nextMilestoneText = 'Maximum Institutional Tenure Rank Achieved!';
+                        nextTargetDays = 365;
+                        progress = 100;
+                    } else if (days >= 180) {
+                        level = 4;
+                        title = 'Half-Year Sustainability Leader';
+                        emoji = '🌳';
+                        tenureLabel = '6 Months (Half-Year)';
+                        shortBadge = 'LVL 4 • 6 MONTHS';
+                        nextMilestoneText = 'Next Rank: Annual Institutional Legend (at 365 Days)';
+                        nextTargetDays = 365;
+                        progress = Math.min(100, Math.round(((days - 180) / (365 - 180)) * 100));
+                    } else if (days >= 90) {
+                        level = 3;
+                        title = 'Quarterly Green Guardian';
+                        emoji = '🪴';
+                        tenureLabel = '3 Months Tenure';
+                        shortBadge = 'LVL 3 • 3 MONTHS';
+                        nextMilestoneText = 'Next Rank: Half-Year Sustainability Leader (at 180 Days)';
+                        nextTargetDays = 180;
+                        progress = Math.min(100, Math.round(((days - 90) / (180 - 90)) * 100));
+                    } else if (days >= 30) {
+                        level = 2;
+                        title = '1-Month Eco Explorer';
+                        emoji = '🌿';
+                        tenureLabel = '1 Month Tenure';
+                        shortBadge = 'LVL 2 • 1 MONTH';
+                        nextMilestoneText = 'Next Rank: Quarterly Green Guardian (at 90 Days)';
+                        nextTargetDays = 90;
+                        progress = Math.min(100, Math.round(((days - 30) / (90 - 30)) * 100));
+                    }
+
+                    return {
+                        level,
+                        title,
+                        emoji,
+                        tenureLabel,
+                        shortBadge,
+                        nextMilestoneText,
+                        days,
+                        nextTargetDays,
+                        progress
+                    };
+                },
+
+                getHostedEventsCount() {
+                    if (!this.currentUser) return 0;
+                    const inCalendar = this.events.filter(e => e && e.organizer === this.currentUser.name).length;
+                    return Math.max(this.user.hostedEventsCount || 0, inCalendar);
+                },
+
+                hasAttended(eventId) {
+                    return this.user.attendedEvents.includes(String(eventId));
+                },
+
+                async handleAuth() {
+                    if (!this.authForm.email || !this.authForm.password) return;
+                    if (this.authMode === 'register') {
+                        if (!this.authForm.name) this.authForm.name = 'Eco Steward';
+                        this.generatedCode = String(Math.floor(100000 + Math.random() * 900000));
+                        this.pendingVerification = true;
+                    } else {
+                        let name = this.authForm.email.split('@')[0];
+                        if (name.toLowerCase().includes('kiruzoid') || (this.authForm.name && this.authForm.name.toLowerCase().includes('kiruzoid'))) {
+                            name = 'Kiruzoid155';
+                        }
+                        this.currentUser = { name: name, email: this.authForm.email, role: this.authForm.role, school: this.authForm.school || '' };
+                        localStorage.setItem('ecocampus_current_user', JSON.stringify(this.currentUser));
+                        this.ensureConsistentTenure();
+                        await this.loadFromCloud();
+                        await this.syncToCloud();
+                        this.triggerToast('Signed in & synced with cloud!');
+                        setTimeout(() => lucide.createIcons(), 100);
+                    }
+                },
+
+                async verifyAndCompleteAuth() {
+                    if (this.enteredCode === this.generatedCode) {
+                        let name = this.authForm.name || 'Eco Steward';
+                        if (name.toLowerCase().includes('kiruzoid') || this.authForm.email.toLowerCase().includes('kiruzoid')) {
+                            name = 'Kiruzoid155';
+                        }
+                        this.currentUser = { name: name, email: this.authForm.email, role: this.authForm.role, school: this.authForm.school || '' };
+                        localStorage.setItem('ecocampus_current_user', JSON.stringify(this.currentUser));
+                        this.pendingVerification = false;
+                        this.ensureConsistentTenure();
+                        await this.loadFromCloud();
+                        await this.syncToCloud();
+                        this.triggerToast('Account verified and synced!');
+                        setTimeout(() => lucide.createIcons(), 100);
+                    } else {
+                        alert('Incorrect verification code. Please enter the code shown above.');
+                    }
+                },
+
+                signOut() {
+                    this.currentUser = null;
+                    localStorage.removeItem('ecocampus_current_user');
+                    this.authMode = 'login';
+                },
+
+                triggerToast(msg) {
+                    this.toast.message = msg;
+                    this.toast.show = true;
+                    setTimeout(() => { this.toast.show = false; }, 3000);
+                },
+
+                async loadFromCloud() {
+                    try {
+                        const res = await fetch(FIREBASE_REST_URL + '?t=' + Date.now(), { cache: 'no-store' });
+                        if (res.ok) {
+                            const data = await res.json();
+                            if (data) {
+                                this.applyCloudState(data);
+                            }
+                        }
+                    } catch(e) {}
+                },
+
+                async syncToCloud() {
+                    try {
+                        const checkRes = await fetch(FIREBASE_REST_URL + '?t=' + Date.now(), { cache: 'no-store' });
+                        if (checkRes.ok) {
+                            const remoteData = await checkRes.json();
+                            if (remoteData) {
+                                if (remoteData.deletedArticleIds) {
+                                    const remoteDel = Array.isArray(remoteData.deletedArticleIds) ? remoteData.deletedArticleIds : Object.values(remoteData.deletedArticleIds);
+                                    this.deletedArticleIds = Array.from(new Set([...this.deletedArticleIds, ...remoteDel.map(String)]));
+                                }
+                                if (remoteData.deletedQuizIds) {
+                                    const rQDel = Array.isArray(remoteData.deletedQuizIds) ? remoteData.deletedQuizIds : Object.values(remoteData.deletedQuizIds);
+                                    this.deletedQuizIds = Array.from(new Set([...this.deletedQuizIds, ...rQDel.map(String)]));
+                                }
+                                if (remoteData.deletedSortIds) {
+                                    const rSDel = Array.isArray(remoteData.deletedSortIds) ? remoteData.deletedSortIds : Object.values(remoteData.deletedSortIds);
+                                    this.deletedSortIds = Array.from(new Set([...this.deletedSortIds, ...rSDel.map(String)]));
+                                }
+                                if (remoteData.users && typeof remoteData.users === 'object') {
+                                    this.cloudProfiles = { ...remoteData.users, ...this.cloudProfiles };
+                                }
+                            }
+                        }
+                    } catch(e) {}
+
+                    this.ensureConsistentTenure();
+                    const userKey = this.getUserKey();
+                    if (userKey) {
+                        this.cloudProfiles[userKey] = {
+                            joinedAt: this.isDeveloper() ? DEVELOPER_START_TIMESTAMP : this.user.joinedAt,
+                            checkedHabitIds: this.habits.filter(h => h.checked).map(h => h.id),
+                            attendedEvents: this.user.attendedEvents || [],
+                            hostedEventsCount: this.user.hostedEventsCount || 0,
+                            bonusCoins: this.user.bonusCoins || 0,
+                            updatedAt: Date.now()
+                        };
+                    }
+
+                    this.articles = this.articles.filter(a => a && !this.isArticleDeleted(a));
+                    try {
+                        localStorage.setItem('ecocampus_deleted_ids', JSON.stringify(this.deletedArticleIds));
+                    } catch(e) {}
+
+                    const payload = {
+                        initialized: true,
+                        articles: this.articles,
+                        deletedArticleIds: this.deletedArticleIds,
+                        quizBank: this.getFilteredQuizBank(),
+                        deletedQuizIds: this.deletedQuizIds,
+                        sortingBank: this.getFilteredSortBank(),
+                        deletedSortIds: this.deletedSortIds,
+                        events: this.events,
+                        feedbacks: this.feedbacks,
+                        users: this.cloudProfiles,
+                        updatedAt: Date.now()
+                    };
+
+                    try {
+                        const res = await fetch(FIREBASE_REST_URL, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+                        if (res.ok) this.cloudConnected = true;
+                    } catch(e) {
+                        this.cloudConnected = false;
+                    }
+
+                    if (typeof firebase !== 'undefined' && firebase.apps.length) {
+                        try {
+                            await firebase.database().ref('ecocampus_shared').set(payload);
+                            this.cloudConnected = true;
+                        } catch(e) {}
+                    }
+                },
+
+                filteredArticles() {
+                    const activeList = this.articles.filter(a => a && !this.isArticleDeleted(a));
+                    if (!this.searchQuery) return activeList;
+                    const q = this.searchQuery.toLowerCase();
+                    return activeList.filter(a => 
+                        (a.title && a.title.toLowerCase().includes(q)) || 
+                        (a.snippet && a.snippet.toLowerCase().includes(q)) ||
+                        (a.category && a.category.toLowerCase().includes(q))
+                    );
+                },
+
+                openArticleModal() {
+                    this.articleForm = { 
+                        id: null, 
+                        title: '', 
+                        category: 'RESEARCH', 
+                        readTime: '5 MIN READ', 
+                        source: this.currentUser ? this.currentUser.name : 'EcoCampus',
+                        image: '', 
+                        snippet: '', 
+                        content: '' 
+                    };
+                    this.showArticleModal = true;
+                },
+
+                editArticle(art) {
+                    this.articleForm = { ...art };
+                    this.showArticleModal = true;
+                },
+
+                async saveArticle() {
+                    if (this.articleForm.id) {
+                        const idx = this.articles.findIndex(a => String(a.id) === String(this.articleForm.id));
+                        if (idx !== -1) {
+                            this.articles[idx] = { 
+                                ...this.articleForm,
+                                image: this.articleForm.image || ''
+                            };
+                        }
+                    } else {
+                        const newArt = { 
+                            ...this.articleForm, 
+                            id: 'art_' + Date.now(), 
+                            author: this.currentUser ? this.currentUser.name : 'Admin',
+                            source: this.articleForm.source || (this.currentUser ? this.currentUser.name : 'EcoCampus'),
+                            image: this.articleForm.image || ''
+                        };
+                        this.articles.unshift(newArt);
+                    }
+                    this.showArticleModal = false;
+                    await this.syncToCloud();
+                    this.triggerToast('Article saved & synced globally!');
+                },
+
+                async deleteArticle(articleId) {
+                    const target = this.articles.find(a => String(a.id) === String(articleId));
+                    const rawId = String(articleId);
+                    const altId = rawId.startsWith('art_') ? rawId.replace('art_', '') : ('art_' + rawId);
+
+                    if (!this.deletedArticleIds.includes(rawId)) this.deletedArticleIds.push(rawId);
+                    if (!this.deletedArticleIds.includes(altId)) this.deletedArticleIds.push(altId);
+                    if (target && target.title && !this.deletedArticleIds.includes(target.title)) {
+                        this.deletedArticleIds.push(target.title);
+                    }
+
+                    this.articles = this.articles.filter(a => !this.isArticleDeleted(a));
+                    if (this.selectedArticle && this.isArticleDeleted(this.selectedArticle)) {
+                        this.selectedArticle = null;
+                    }
+                    await this.syncToCloud();
+                    this.triggerToast('Article deleted across all devices.');
+                },
+
+                getDaysInMonth() {
+                    return new Date(this.calYear, this.calMonth + 1, 0).getDate();
+                },
+
+                getBlankDays() {
+                    let firstDayIdx = new Date(this.calYear, this.calMonth, 1).getDay();
+                    return firstDayIdx === 0 ? 6 : firstDayIdx - 1;
+                },
+
+                prevMonth() {
+                    if (this.calMonth === 0) { this.calMonth = 11; this.calYear--; }
+                    else { this.calMonth--; }
+                    this.selectedDay = null;
+                },
+
+                nextMonth() {
+                    if (this.calMonth === 11) { this.calMonth = 0; this.calYear++; }
+                    else { this.calMonth++; }
+                    this.selectedDay = null;
+                },
+
+                goToToday() {
+                    this.calMonth = new Date().getMonth();
+                    this.calYear = new Date().getFullYear();
+                    this.selectedDay = null;
+                },
+
+                getEventsForDay(dayNum) {
+                    return this.events.filter(e => Number(e.day) === Number(dayNum) && Number(e.month) === Number(this.calMonth));
+                },
+
+                getFilteredEvents() {
+                    if (this.selectedDay !== null) {
+                        return this.getEventsForDay(this.selectedDay);
+                    }
+                    return this.events.filter(e => Number(e.month) === Number(this.calMonth));
+                },
+
+                async createEvent() {
+                    const newEv = {
+                        id: 'ev_' + Date.now(),
+                        title: this.newEvent.title,
+                        day: Number(this.newEvent.day),
+                        month: Number(this.newEvent.month),
+                        date: this.newEvent.day + ' ' + this.monthNames[Number(this.newEvent.month)].slice(0, 3),
+                        location: this.newEvent.location,
+                        desc: this.newEvent.desc,
+                        organizer: this.currentUser ? this.currentUser.name : 'Campus Organizer'
+                    };
+                    this.events.push(newEv);
+                    this.user.hostedEventsCount = (this.user.hostedEventsCount || 0) + 1;
+                    try { localStorage.setItem('ecocampus_hosted_count_v6', String(this.user.hostedEventsCount)); } catch(e){}
+                    
+                    this.newEvent = { title: '', day: new Date().getDate(), month: this.calMonth, location: '', desc: '' };
+                    await this.syncToCloud();
+                    this.triggerToast('Initiative published globally!');
+                },
+
+                async deleteEvent(id) {
+                    this.events = this.events.filter(e => String(e.id) !== String(id));
+                    await this.syncToCloud();
+                    this.triggerToast('Event deleted.');
+                },
+
+                rsvpEvent(ev) {
+                    const idStr = String(ev.id);
+                    if (!this.user.attendedEvents.includes(idStr)) {
+                        this.user.attendedEvents.push(idStr);
+                        this.updateStats(true);
+                        try {
+                            localStorage.setItem('ecocampus_attended_events_v6', JSON.stringify(this.user.attendedEvents));
+                        } catch(e){}
+                        this.triggerToast('RSVP Confirmed! +25 EC Earned 🪙');
+                    } else {
+                        this.triggerToast('You are already registered for this event!');
+                    }
+                },
+
+                recalculateImpact() {
+                    const checkedCount = this.habits.filter(h => h.checked).length;
+                    const waterNum = checkedCount * 45;
+                    this.waterSaved = waterNum.toLocaleString() + ' L';
+                    this.paperSaved = checkedCount * 1.25;
+                    if (checkedCount === 0) {
+                        this.impactEquiv = 'Complete your first daily habit to start conserving campus resources!';
+                    } else {
+                        const trees = Math.max(1, Math.ceil(checkedCount / 2));
+                        this.impactEquiv = `Equivalent to saving ${trees} mature pine tree(s) this month!`;
+                    }
+                },
+
+                updateStats(pushToCloud = true) {
+                    let earnedFromHabits = 0;
+                    this.habits.forEach(h => { if (h.checked) earnedFromHabits += h.val; });
+                    const earnedFromEvents = (this.user.attendedEvents ? this.user.attendedEvents.length : 0) * 25;
+                    const earnedFromChallenge = this.user.bonusCoins || 0;
+                    this.user.coins = Math.max(0, earnedFromHabits + earnedFromEvents + earnedFromChallenge - (this.user.spentCoins || 0));
+                    this.recalculateImpact();
+                    try {
+                        localStorage.setItem('ecocampus_habits_v6', JSON.stringify(this.habits));
+                        localStorage.setItem('ecocampus_coins_v6', String(this.user.coins));
+                        localStorage.setItem('ecocampus_bonus_coins_v6', String(this.user.bonusCoins || 0));
+                    } catch(e){}
+                    if (pushToCloud) {
+                        this.syncToCloud();
+                    }
+                },
+
+                resetHabitsAndCoins() {
+                    this.habits.forEach(h => { h.checked = false; });
+                    this.user.attendedEvents = [];
+                    this.user.spentCoins = 0;
+                    this.user.bonusCoins = 0;
+                    this.user.coins = 0;
+                    this.recalculateImpact();
+                    try {
+                        localStorage.setItem('ecocampus_habits_v6', JSON.stringify(this.habits));
+                        localStorage.setItem('ecocampus_attended_events_v6', JSON.stringify([]));
+                        localStorage.setItem('ecocampus_spent_coins_v6', '0');
+                        localStorage.setItem('ecocampus_bonus_coins_v6', '0');
+                        localStorage.setItem('ecocampus_coins_v6', '0');
+                    } catch(e){}
+                    this.syncToCloud();
+                    this.triggerToast('Habits and Eco Coins reset to 0 EC!');
+                },
+
+                buyReward(item) {
+                    if (this.user.coins >= item.cost) {
+                        this.user.spentCoins = (this.user.spentCoins || 0) + item.cost;
+                        this.updateStats(true);
+                        try { localStorage.setItem('ecocampus_spent_coins_v6', String(this.user.spentCoins)); } catch(e){}
+                        this.triggerToast('Successfully claimed: ' + item.name + '!');
+                    } else {
+                        alert('Not enough Eco Coins (EC)! Complete daily habits or take the Eco Challenge to earn more.');
+                    }
+                }
+            }
+        }
+    </script>
+</body>
+</html>
